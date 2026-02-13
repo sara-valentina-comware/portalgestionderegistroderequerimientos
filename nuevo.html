@@ -28,61 +28,43 @@
         </div>
     </header>
 
-    <main class="main-content">
+    <main class="main-content-bot">
 
-        <section class="page-header" style="text-align: center; margin-bottom: 30px;">
-            <h1 style="color: #273c75;">Nuevo Requerimiento</h1>
-            <p>Complete la información para registrar formalmente la solicitud.</p>
+        <section class="chatbot-card">
+
+            <div class="chat-header">
+
+                <div class="bot-info">
+                    <div class="bot-avatar">
+                        <img src="img/bot.png" alt="NOVA">
+                    </div>
+
+                    <div>
+                        <h3>NOVA IA</h3>
+                        <span class="status-online">En línea</span>
+                    </div>
+                </div>
+
+            </div>
+
+
+            <div class="chat-messages" id="chatMessages">
+                <div class="message bot">
+                    👋 Hola, soy Asistente de Gestion de Requerimientos.
+                    <br><br>
+                    Le ayudaré a crear su requerimiento paso a paso.
+                    <br><br>
+                    ¿Cuál es su nombre?🙂
+                </div>
+            </div>
+
+            <div class="chat-input-area">
+                <textarea id="userInput" placeholder="Escribe tu mensaje aquí..."></textarea>
+                <button onclick="sendMessage()">Enviar</button>
+            </div>
+
         </section>
 
-        <section class="form-card">
-
-            <div class="form-group">
-                <label>1. Nombre del requerimiento *</label>
-                <input type="text" id="titulo" placeholder="¿Cómo deseea que se llame el Requerimiento?">
-            </div>            
-
-            <div class="form-group">
-                <label>2. Descripción del Problema Actual *</label>
-                <textarea id="problema" placeholder="¿Qué es lo que no está funcionando o qué error aparece?"></textarea>
-            </div>
-
-            <div class="form-group">
-                <label>3. Descripción del Requerimiento *</label>
-                <textarea id="descripcion" placeholder="¿Qué necesitas exactamente que desarrollemos o cambiemos?"></textarea>
-            </div>
-
-            <div class="form-group">
-                <label>4. Alcance</label>
-                <textarea id="alcance" placeholder="¿Qué proceso optimizará? Ya sea a nivel personal y/u operativo"></textarea>
-            </div>
-
-            <div class="form-group">
-                <label>5. Centro de costos / Proyecto</label>
-                <select id="centro_costos">
-                    <option value="">Seleccione a qué cuenta o proyecto se debe asignar este trabajo</option>
-                    <option value="ICETEX">ICETEX</option>
-                    <option value="PROCOLOMBIA">PROCOLOMBIA</option>
-                    <option value="CANCILLERIA">CANCILLERIA</option>
-                    <option value="Otro">Otro</option>
-                </select>
-            </div>
-
-            <div class="form-group">
-                <label>6. Criterios de aceptación</label>
-                <textarea id="criterios" placeholder="¿Qué debe cumplirse para considerarlo aprobado?"></textarea>
-            </div>
-
-            <div class="form-group">
-                <label>7. Beneficio esperado</label>
-                <textarea id="beneficio" placeholder="¿En qué mejorará tu proceso una vez que esto se implemente?"></textarea>
-            </div>
-
-            <button class="btn-primary" type="button" onclick="irPreview()" style="margin-top: 20px;">
-                Generar análisis IA
-            </button>
-
-        </section>
     </main>
 
     <script src="js/script.js"></script>

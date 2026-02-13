@@ -1,4 +1,7 @@
 
+const NOVA_URL = "https://n8n.comware.com.co/webhook/chat-portalgestionderegistroderequerimientos";
+
+
 function login() {
     const usuario = document.getElementById("usuario").value.trim();
     const password = document.getElementById("password").value.trim();
@@ -20,6 +23,71 @@ function irNuevo() {
     window.location.href = "nuevo.html";
 }
 
+//INTEGRACIÓN DE NOVA (n8n)
+async function sendMessage() {
+    const input = document.getElementById("userInput");
+    const chat = document.getElementById("chatMessages");
+
+    if (input.value.trim() === "") return;
+
+    const userText = input.value;
+
+    // Mensaje usuario
+    const userMessage = document.createElement("div");
+    userMessage.classList.add("message", "user");
+    userMessage.textContent = userText;
+    chat.appendChild(userMessage);
+
+    chat.scrollTop = chat.scrollHeight;
+    input.value = "";
+
+    // Mensaje temporal "escribiendo..."
+    const typingMessage = document.createElement("div");
+    typingMessage.classList.add("message", "bot");
+    typingMessage.textContent = "NOVA está escribiendo...";
+    chat.appendChild(typingMessage);
+    chat.scrollTop = chat.scrollHeight;
+
+    try {
+        const response = await fetch(NOVA_URL, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                message: userText,
+                threadId: localStorage.getItem("usuarioLogueado") || "anonimo"
+            })
+        });
+
+        const data = await response.json();
+
+        // Quitar "escribiendo..."
+        typingMessage.remove();
+
+        // Respuesta bot
+        const botMessage = document.createElement("div");
+        botMessage.classList.add("message", "bot");
+        botMessage.innerHTML = data.reply || "NOVA no respondió.";
+        chat.appendChild(botMessage);
+
+        chat.scrollTop = chat.scrollHeight;
+
+    } catch (error) {
+        typingMessage.remove();
+
+        const errorMessage = document.createElement("div");
+        errorMessage.classList.add("message", "bot");
+        errorMessage.textContent = "Error al conectar con NOVA.";
+        chat.appendChild(errorMessage);
+
+        chat.scrollTop = chat.scrollHeight;
+
+        console.error("Error NOVA:", error);
+    }
+}
+
+
 function irPreview() {
     const data = {
         titulo: document.getElementById("titulo").value.trim(),
@@ -27,7 +95,7 @@ function irPreview() {
         descripcion: document.getElementById("descripcion").value.trim(),
         alcance: document.getElementById("alcance").value.trim(),
         centro_costos: document.getElementById("centro_costos").value,
-        criterios: document.getElementById("criterios").value.trim(),        
+        criterios: document.getElementById("criterios").value.trim(),
         beneficio: document.getElementById("beneficio").value.trim()
     };
 
@@ -55,7 +123,7 @@ function cargarFormulario() {
 
     // Si hay datos, los carga; si no, mantiene los campos vacíos
     if (data) {
-        document.getElementById("titulo").value = data.titulo || "";        
+        document.getElementById("titulo").value = data.titulo || "";
         document.getElementById("problema").value = data.problema || "";
         document.getElementById("descripcion").value = data.descripcion || "";
         document.getElementById("alcance").value = data.alcance || "";
@@ -64,7 +132,7 @@ function cargarFormulario() {
         document.getElementById("beneficio").value = data.beneficio || "";
     } else {
         // Limpiar todos los campos por si hay datos previos
-        document.getElementById("titulo").value = "";        
+        document.getElementById("titulo").value = "";
         document.getElementById("problema").value = "";
         document.getElementById("descripcion").value = "";
         document.getElementById("alcance").value = "";
@@ -136,6 +204,8 @@ function cargarResultado() {
 if (window.location.pathname.includes("resultado.html")) {
     cargarResultado();
 }
+
+
 
 /* SEGURIDAD BÁSICA */
 
