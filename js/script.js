@@ -13,7 +13,7 @@ function login() {
 
 function logout() {
     localStorage.removeItem("usuarioLogueado");
-    window.location.href = "login.html";
+    window.location.href = "index.html";
 }
 
 function irNuevo() {
@@ -23,14 +23,11 @@ function irNuevo() {
 function irPreview() {
     const data = {
         titulo: document.getElementById("titulo").value.trim(),
-        prioridad: document.getElementById("prioridad").value,
-        servicio: document.getElementById("servicio").value,
         problema: document.getElementById("problema").value.trim(),
         descripcion: document.getElementById("descripcion").value.trim(),
         alcance: document.getElementById("alcance").value.trim(),
         centro_costos: document.getElementById("centro_costos").value,
-        criterios: document.getElementById("criterios").value.trim(),
-        impacto: document.getElementById("impacto").value.trim(),
+        criterios: document.getElementById("criterios").value.trim(),        
         beneficio: document.getElementById("beneficio").value.trim()
     };
 
@@ -58,27 +55,21 @@ function cargarFormulario() {
 
     // Si hay datos, los carga; si no, mantiene los campos vacíos
     if (data) {
-        document.getElementById("titulo").value = data.titulo || "";
-        document.getElementById("prioridad").value = data.prioridad || "";
-        document.getElementById("servicio").value = data.servicio || "";
+        document.getElementById("titulo").value = data.titulo || "";        
         document.getElementById("problema").value = data.problema || "";
         document.getElementById("descripcion").value = data.descripcion || "";
         document.getElementById("alcance").value = data.alcance || "";
         document.getElementById("centro_costos").value = data.centro_costos || "";
         document.getElementById("criterios").value = data.criterios || "";
-        document.getElementById("impacto").value = data.impacto || "";
         document.getElementById("beneficio").value = data.beneficio || "";
     } else {
         // Limpiar todos los campos por si hay datos previos
-        document.getElementById("titulo").value = "";
-        document.getElementById("prioridad").value = "";
-        document.getElementById("servicio").value = "";
+        document.getElementById("titulo").value = "";        
         document.getElementById("problema").value = "";
         document.getElementById("descripcion").value = "";
         document.getElementById("alcance").value = "";
         document.getElementById("centro_costos").value = "";
         document.getElementById("criterios").value = "";
-        document.getElementById("impacto").value = "";
         document.getElementById("beneficio").value = "";
     }
 }
@@ -109,8 +100,6 @@ function cargarResultado() {
         <hr>
 
         <h3>1. Información General</h3>
-        <p><strong>Aplicativo:</strong> ${data.servicio}</p>
-        <p><strong>Prioridad:</strong> ${data.prioridad}</p>
         <p><strong>Centro de Costos:</strong> ${data.centro_costos}</p>
 
         <hr>
@@ -130,9 +119,6 @@ function cargarResultado() {
         <p>${data.criterios}</p>
 
         <hr>
-
-        <h3>6. Impacto si no se realiza</h3>
-        <p>${data.impacto}</p>
 
         <h3>7. Beneficio Esperado</h3>
         <p>${data.beneficio}</p>
@@ -154,9 +140,11 @@ if (window.location.pathname.includes("resultado.html")) {
 /* SEGURIDAD BÁSICA */
 
 window.onload = function () {
+    const usuario = localStorage.getItem("usuarioLogueado");
+    const paginaActual = window.location.pathname;
 
-    if (!localStorage.getItem("usuarioLogueado") &&
-        !window.location.pathname.includes("login")) {
-        window.location.href = "login.html";
+    // Si no hay usuario logueado y no estamos en index.html, redirige
+    if (!usuario && !paginaActual.includes("index.html")) {
+        window.location.href = "index.html";
     }
 };
