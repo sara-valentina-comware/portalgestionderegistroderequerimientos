@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="icon" href="img/icono.png">
+    <title>Registro de Requerimientos</title>
+</head>
+
+<body class="nuevo-page">
+
+    <header class="main-header">
+        <div class="header-container">
+            <nav class="nav-menu">
+                <a href="#" class="logo">
+                    <img src="img/logo blanco.png" alt="Logo Empresa">
+                </a>
+                <div class="nav-links">
+                    <a href="inicio.html">Inicio</a>
+                    <a href="#">Mis Requerimientos</a>
+                </div>
+                <a href="#" class="logout" onclick="logout()">
+                    <img src="img/log-out.png" alt="Salir">
+                </a>
+            </nav>
+        </div>
+    </header>
+
+    <main class="main-content">
+
+        <section class="page-header" style="text-align: center; margin-bottom: 30px;">
+            <h1 style="color: #273c75;">Nuevo Requerimiento</h1>
+            <p>Complete la información para registrar formalmente la solicitud.</p>
+        </section>
+
+        <section class="form-card">
+
+            <div class="form-group">
+                <label>1. Nombre del requerimiento *</label>
+                <input type="text" id="titulo" placeholder="¿Cómo deseea que se llame el Requerimiento?">
+            </div>
+
+            <div class="form-group">
+                <label>2. Prioridad</label>
+                <select id="prioridad">
+                    <option value="">Seleccione qué tan urgente es esta solicitud para la operación</option>
+                    <option value="Alta">Alta</option>
+                    <option value="Media">Media</option>
+                    <option value="Baja">Baja</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>3. Aplicativo Afectado</label>
+                <select id="servicio">
+                    <option value="">Seleccione en qué software o plataforma específica se necesita el apoyo</option>
+                    <option>SpeechWare</option>
+                    <option>API Marketing Masivian</option>
+                    <option>App de Embajadores</option>
+                    <option>App de Nómina</option>
+                    <option>Bright Pattern</option>
+                    <option>Comproject</option>
+                    <option>Comware Interno - Kiosco</option>
+                    <option>ComwQuality</option>
+                    <option>CRMWare</option>
+                    <option>CWACTIVE</option>
+                    <option>CWTRS</option>
+                    <option>ELearning</option>
+                    <option>GitHub</option>
+                    <option>HSM Desprendibles de Nómina</option>
+                    <option>Intranet</option>
+                    <option>Moodle</option>
+                    <option>NOVA</option>
+                    <option>OCR</option>
+                    <option>OnTime</option>
+                    <option>OTRS</option>
+                    <option>Portal Comercial</option>
+                    <option>Portal de Activos</option>
+                    <option>Portal Integral GH</option>
+                    <option>Power BI</option>
+                    <option>Presence</option>
+                    <option>Qlik Sense</option>
+                    <option>RecordingWare</option>
+                    <option>SAP</option>
+                    <option>SARA</option>
+                    <option>ScreenWare</option>
+                    <option>Superset</option>
+                    <option>SurveyWare</option>
+                    <option>Plataforma Biometría</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>4. Descripción del Problema Actual *</label>
+                <textarea id="problema" placeholder="¿Qué es lo que no está funcionando o qué error aparece?"></textarea>
+            </div>
+
+            <div class="form-group">
+                <label>5. Descripción del Requerimiento *</label>
+                <textarea id="descripcion" placeholder="¿Qué necesitas exactamente que desarrollemos o cambiemos?"></textarea>
+            </div>
+
+            <div class="form-group">
+                <label>6. Alcance</label>
+                <textarea id="alcance" placeholder="Explique hasta dónde debe llegar este requerimiento"></textarea>
+            </div>
+
+            <div class="form-group">
+                <label>7. Centro de costos / Proyecto</label>
+                <select id="centro_costos">
+                    <option value="">Seleccione a qué cuenta o proyecto se debe asignar este trabajo</option>
+                    <option value="ICETEX">ICETEX</option>
+                    <option value="PROCOLOMBIA">PROCOLOMBIA</option>
+                    <option value="CANCILLERIA">CANCILLERIA</option>
+                    <option value="Otro">Otro</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>8. Criterios de aceptación</label>
+                <textarea id="criterios" placeholder="¿Qué debe cumplirse para considerarlo aprobado?"></textarea>
+            </div>
+
+            <div class="form-group">
+                <label>9. Impacto si no se realiza</label>
+                <textarea id="impacto" placeholder="¿Qué riesgos o bloqueos se enfrentará si no se soluciona pronto?"></textarea>
+            </div>
+
+            <div class="form-group">
+                <label>10. Beneficio esperado</label>
+                <textarea id="beneficio" placeholder="¿En qué mejorará tu proceso una vez que esto se implemente?"></textarea>
+            </div>
+
+            <button class="btn-primary" type="button" onclick="irPreview()" style="margin-top: 20px;">
+                Generar análisis IA
+            </button>
+
+        </section>
+    </main>
+
+    <script src="js/script.js"></script>
+
+</body>
+
+</html>

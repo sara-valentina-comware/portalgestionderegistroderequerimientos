@@ -1,0 +1,535 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap');
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Poppins', sans-serif;
+    background-color: #f5f7fb;
+    min-height: 100vh;
+    color: #333;
+}
+
+/* HEADER / NAV */
+.main-header {
+    width: 100%;
+    background: linear-gradient(135deg, #2282bf, #273c75);
+    padding: 10px 20px;
+    border-radius: 0 0 15px 15px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.header-container {
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.nav-menu {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.nav-menu .logo img {
+    height: 70px;
+    border-radius: 8px;
+    transition: transform 0.3s;
+}
+
+.nav-menu .logo:hover img {
+    transform: scale(1.1);
+}
+
+.nav-links {
+    display: flex;
+    gap: 30px;
+}
+
+.nav-links a {
+    color: #ffffff;
+    text-decoration: none;
+    font-weight: 500;
+    font-size: 18px;
+    text-transform: uppercase;
+    position: relative;
+    transition: all 0.3s ease;
+}
+
+.nav-links a::after {
+    content: '';
+    display: block;
+    height: 3px;
+    width: 0;
+    background: #fffa65;
+    transition: width 0.3s ease;
+    position: absolute;
+    bottom: -5px;
+    left: 0;
+    border-radius: 2px;
+}
+
+.nav-links a:hover {
+    color: #fffa65;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.3);
+}
+
+.nav-links a:hover::after {
+    width: 100%;
+}
+
+.nav-menu .logout img {
+    height: 50px;
+    cursor: pointer;
+    transition: transform 0.3s;
+}
+
+.nav-menu .logout img:hover {
+    transform: rotate(20deg) scale(1.2);
+}
+
+/* INICIO */
+.main-content {
+    max-width: 1200px;
+    margin: 60px auto;
+    padding: 0 25px;
+}
+
+.intro {
+    text-align: center;
+    margin-bottom: 60px;
+}
+
+.intro h1 {
+    font-size: 32px;
+    font-weight: 700;
+    color: #273c75;
+    margin-bottom: 15px;
+}
+
+.intro p {
+    font-size: 18px;
+    color: #555;
+    max-width: 850px;
+    margin: 0 auto;
+    line-height: 1.8;
+}
+
+.actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 30px;
+    justify-content: center;
+}
+
+.action-card {
+    background: linear-gradient(135deg, #ffffff, #f0f4f8);
+    border-radius: 15px;
+    padding: 30px 25px;
+    flex: 1 1 300px;
+    max-width: 480px;
+    display: flex;
+    align-items: flex-start;
+    gap: 20px;
+    border: 1px solid #e0e0e0;
+    box-shadow: 0 12px 25px rgba(0, 0, 0, 0.08);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    cursor: pointer;
+}
+
+.action-card:hover {
+    transform: translateY(-8px);
+    box-shadow: 0 18px 35px rgba(0, 0, 0, 0.12);
+}
+
+.action-card .icon img {
+    width: 70px;
+    height: 70px;
+}
+
+.action-card .content h3 {
+    font-size: 22px;
+    font-weight: 600;
+    margin-bottom: 8px;
+    color: #273c75;
+}
+
+.action-card .content p {
+    font-size: 15px;
+    color: #555;
+    line-height: 1.7;
+    margin-bottom: 12px;
+}
+
+.action-card .action-btn {
+    display: inline-block;
+    padding: 10px 18px;
+    background: #2282bf;
+    color: #fff;
+    font-size: 14px;
+    font-weight: 600;
+    border-radius: 8px;
+    transition: background 0.3s, transform 0.2s;
+}
+
+.action-card .action-btn:hover {
+    background: #1a6aa0;
+    transform: scale(1.05);
+}
+
+
+/* NUEVO */
+.form-card {
+    background: white;
+    padding: 35px 40px;
+    border-radius: 12px;
+    border: 1px solid #e5e7eb;
+    box-shadow: 0 12px 30px rgba(0,0,0,0.08);
+    transition: 0.3s;
+}
+
+.form-card:hover {
+    box-shadow: 0 15px 35px rgba(0,0,0,0.12);
+}
+
+.form-group {
+    margin-bottom: 22px;
+}
+
+.form-group label {
+    font-size: 16px;
+    font-weight: 600;
+    display: block;
+    margin-bottom: 8px;
+    color: #273c75;
+}
+
+input,
+select,
+textarea {
+    width: 100%;
+    padding: 12px 14px;
+    border-radius: 8px;
+    border: 1px solid #ccc;
+    font-size: 15px;
+    transition: all 0.3s ease;
+    outline: none;
+    background: #fefefe;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+    border-color: #2282bf;
+    box-shadow: 0 0 0 3px rgba(34,130,191,0.15);
+}
+
+textarea {
+    min-height: 100px;
+    resize: vertical;
+}
+
+input::placeholder,
+textarea::placeholder {
+    color: #aaa;
+    font-style: italic;
+}
+
+button.btn-primary {
+    display: inline-block;
+    background: #2282bf;
+    color: #fff;
+    font-size: 16px;
+    font-weight: 600;
+    padding: 14px 28px;
+    border-radius: 10px;
+    border: none;
+    cursor: pointer;
+    transition: background 0.3s, transform 0.2s;
+}
+
+button.btn-primary:hover {
+    background: #1a6aa0;
+    transform: scale(1.05);
+}
+
+
+/* PREVIEW */
+.preview-page .main-content {
+    max-width: 900px;
+    margin: 60px auto;
+    padding: 0 25px;
+}
+
+.preview-card {
+    background: white;
+    padding: 35px 40px;
+    border-radius: 12px;
+    border: 1px solid #e5e7eb;
+    box-shadow: 0 12px 30px rgba(0,0,0,0.08);
+    display: flex;
+    flex-direction: column;
+    gap: 25px;
+    transition: 0.3s;
+}
+
+.preview-card:hover {
+    box-shadow: 0 15px 35px rgba(0,0,0,0.12);
+}
+
+.page-header h1 {
+    color: #273c75;
+    font-size: 30px;
+    font-weight: 700;
+    margin-bottom: 10px;
+    text-align: center;
+}
+
+.page-header p {
+    font-size: 16px;
+    color: #555;
+    text-align: center;
+    margin-bottom: 30px;
+}
+
+.status-badge {
+    display: inline-block;
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-size: 14px;
+    font-weight: 600;
+    color: white;
+    width: fit-content;
+}
+
+.status-badge.warning {
+    background-color: #f39c12; 
+}
+
+.status-badge.success {
+    background-color: #27ae60; 
+}
+
+.status-badge.error {
+    background-color: #c0392b; 
+}
+
+.preview-content {
+    background: #f9fafc;
+    padding: 20px;
+    border-radius: 8px;
+    border: 1px solid #e0e0e0;
+    min-height: 150px;
+    font-size: 15px;
+    color: #333;
+    line-height: 1.6;
+    white-space: pre-line;
+}
+
+.actions-buttons {
+    display: flex;
+    justify-content: flex-end;
+    gap: 15px;
+    margin-top: 20px;
+}
+
+.actions-buttons button {
+    padding: 12px 28px;
+    font-size: 15px;
+    border-radius: 10px;
+    cursor: pointer;
+    border: none;
+    transition: 0.3s;
+}
+
+.actions-buttons button:hover {
+    opacity: 0.9;
+}
+
+.actions-buttons button.btn-primary {
+    background: #2282bf;
+    color: white;
+}
+
+.actions-buttons button.btn-primary:hover {
+    background: #1a6aa0;
+    transform: scale(1.03);
+}
+
+/* RESULTADOS / DOCUMENTOS */
+.result-card {
+    background: white;
+    padding: 35px 40px;
+    border-radius: 12px;
+    border: 1px solid #e5e7eb;
+    box-shadow: 0 12px 30px rgba(0,0,0,0.08);
+    display: flex;
+    flex-direction: column;
+    gap: 25px;
+    transition: 0.3s;
+}
+
+.result-card:hover {
+    box-shadow: 0 15px 35px rgba(0,0,0,0.12);
+}
+
+.status-badge {
+    display: inline-block;
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-size: 14px;
+    font-weight: 600;
+    color: white;
+    width: fit-content;
+}
+
+.status-badge.success { background-color: #27ae60; }
+.status-badge.warning { background-color: #f39c12; }
+.status-badge.error   { background-color: #c0392b; }
+
+.document-preview {
+    background: #f9fafc;
+    padding: 20px;
+    border-radius: 8px;
+    border: 1px solid #e0e0e0;
+    min-height: 200px;
+    max-height: 450px;
+    font-size: 15px;
+    color: #333;
+    line-height: 1.6;
+    overflow-y: auto;
+    white-space: pre-line;
+}
+
+.actions-buttons {
+    display: flex;
+    justify-content: flex-end;
+    gap: 15px;
+    margin-top: 20px;
+}
+
+.actions-buttons button {
+    display: inline-block;
+    background: #273c75;
+    color: #fff;
+    font-size: 16px;
+    font-weight: 600;
+    padding: 14px 28px;
+    border-radius: 10px;
+    border: none;
+    cursor: pointer;
+    transition: background 0.3s, transform 0.2s;
+}
+
+.actions-buttons button:hover { opacity: 0.9; }
+
+.actions-buttons button.btn-primary {
+    background: #2282bf;
+    color: white;
+}
+
+.actions-buttons button.btn-primary:hover {
+    background: #1a6aa0;
+    transform: scale(1.03);
+}
+
+
+/* LOGIN */
+.login-page {
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: linear-gradient(135deg, #2282bf, #273c75);
+}
+
+.login-wrapper {
+    width: 850px;
+    height: 450px;
+    background: #fff;
+    border-radius: 12px;
+    display: flex;
+    overflow: hidden;
+    box-shadow: 0 20px 40px rgba(189, 171, 171, 0.089);
+    transition: box-shadow 0.3s ease, transform 0.3s ease;
+    cursor: default;
+}
+
+.login-wrapper:hover {
+    box-shadow: 0 30px 60px rgba(255, 255, 255, 0.384);
+    transform: translateY(-5px);
+}
+
+.login-card {
+    flex: 1;
+    padding: 50px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.login-card h2 {
+    margin: 0;
+    font-size: 30px;
+    font-weight: 700;
+    text-align: center;
+    color: #273c75;
+}
+
+.subtitle {
+    color: #777;
+    text-align: center;
+    margin-bottom: 30px;
+    font-size: 14px;
+}
+
+.login-card input {
+    padding: 12px;
+    margin-bottom: 15px;
+    border-radius: 6px;
+    border: 1px solid #ddd;
+    font-size: 14px;
+    transition: 0.2s;
+}
+
+.login-card input:focus {
+    border-color: #273c75;
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(39, 60, 117, 0.1);
+}
+
+.login-card button {
+    display: inline-block;
+    background: #273c75;
+    color: #fff;
+    font-size: 16px;
+    font-weight: 600;
+    padding: 14px 28px;
+    border-radius: 10px;
+    border: none;
+    cursor: pointer;
+    transition: background 0.3s, transform 0.2s;
+
+}
+
+.login-card button:hover {
+    background: #1a6aa0;
+    transform: scale(1.05);
+}
+
+.login-logo {
+    flex: 1;
+    background: #f5f6fa;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 40px;
+}
+
+.login-logo img {
+    max-width: 100%;
+    max-height: 220px;
+    object-fit: contain;
+}

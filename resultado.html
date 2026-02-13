@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="icon" href="img/icono.png">
+    <title>Registro de Requerimientos</title>
+</head>
+
+<body>
+
+    <header class="main-header">
+        <div class="header-container">
+            <nav class="nav-menu">
+                <a href="#" class="logo">
+                    <img src="img/logo blanco.png" alt="Logo Empresa">
+                </a>
+                <div class="nav-links">
+                    <a href="inicio.html">Inicio</a>
+                </div>
+                <a href="#" class="logout" onclick="logout()">
+                    <img src="img/log-out.png" alt="Salir">
+                </a>
+            </nav>
+        </div>
+    </header>
+
+    <main class="main-content">
+
+        <section class="page-header">
+            <h1>Documento Técnico Generado</h1>
+            <p>Revisa el levantamiento generado antes de enviar la solicitud del Requerimiento.</p>
+        </section>
+
+        <section class="result-card">
+
+            <div class="status-badge success">Listo para aprobación</div>
+
+            <div class="document-preview" id="resultadoContenido">
+                Cargando documento técnico...
+            </div>
+
+
+
+            <div class="actions-buttons">
+                <button>Aprobar y Enviar a JIRA</button>
+            </div>
+
+        </section>
+
+    </main>
+
+    <script src="js/script.js"></script>
+</body>
+
+</html>
