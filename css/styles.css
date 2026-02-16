@@ -313,6 +313,24 @@ body {
     font-size: 18px;
 }
 
+.attach-btn {
+    width: 42px;
+    height: 42px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 18px;
+    background: transparent;
+    transition: 0.2s;
+}
+
+.attach-btn:hover {
+    background: #e9eef5;
+    transform: scale(1.05);
+}
+
 .input-box button:hover {
     background: #1a6aa0;
     transform: scale(1.05);
@@ -327,11 +345,37 @@ body {
     border-radius: 10px;
 }
 
+.file-preview {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+    flex-wrap: wrap;
+}
+
+.file-chip {
+    background: #e9eef5;
+    padding: 6px 10px;
+    border-radius: 20px;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.file-chip button {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 14px;
+}
+
 @keyframes fadeIn {
     from {
         opacity: 0;
         transform: translateY(4px);
     }
+
     to {
         opacity: 1;
         transform: translateY(0);

@@ -52,8 +52,13 @@
 
             <div class="chat-input-area">
                 <div class="input-box">
-                    <textarea id="userInput" placeholder="Pregunta lo que quieras" rows="1">
-                </textarea>
+
+                    <label for="fileInput" class="attach-btn">📎</label>
+                    <input type="file" id="fileInput" hidden>
+
+                    <div id="filePreview" class="file-preview"></div>
+
+                    <textarea id="userInput" placeholder="Escribe tu mensaje..." rows="1"></textarea>
 
                     <button onclick="sendMessage()">➤</button>
                 </div>

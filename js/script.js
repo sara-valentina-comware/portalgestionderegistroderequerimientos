@@ -16,17 +16,39 @@ function scrollToBottom(force = false) {
 
 
 /* LOGIN / LOGOUT */
-function login() {
+async function login() {
     const usuario = document.getElementById("usuario")?.value.trim();
     const password = document.getElementById("password")?.value.trim();
 
-    if (usuario === "admin" && password === "12345") {
-        localStorage.setItem("usuarioLogueado", usuario);
-        window.location.href = "inicio.html";
-    } else {
-        alert("Usuario o contraseña incorrectos");
+    if (!usuario || !password) {
+        alert("Por favor ingrese usuario y contraseña");
+        return;
+    }
+
+    try {
+        const response = await fetch("http://localhost:3000/login", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ usuario, password })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            localStorage.setItem("usuarioLogueado", usuario);
+            window.location.href = "inicio.html";
+        } else {
+            alert("Usuario o contraseña incorrectos");
+        }
+
+    } catch (error) {
+        console.error("Error en login:", error);
+        alert("Error al conectar con el servidor");
     }
 }
+
 
 function logout() {
     localStorage.removeItem("usuarioLogueado");
@@ -55,11 +77,15 @@ function nuevoRequerimiento() {
 async function sendMessage() {
     const input = document.getElementById("userInput");
     const chat = document.getElementById("chatMessages");
+    const fileInput = document.getElementById("fileInput");
 
     if (!input || !chat) return;
-    if (input.value.trim() === "") return;
 
     const userText = input.value.trim();
+    const file = fileInput?.files[0];
+
+    // Permitir enviar si hay texto o archivo
+    if (!userText && !file) return;
 
     /***** MENSAJE USUARIO *****/
     const userMessage = document.createElement("div");
@@ -67,7 +93,8 @@ async function sendMessage() {
 
     userMessage.innerHTML = `
         <div class="message-content">
-            ${userText}
+            ${userText || ""}
+            ${file ? `<br><small>📎 ${file.name}</small>` : ""}
         </div>
         <div class="message-icon">
             <img src="img/avatar.png" alt="Usuario">
@@ -78,8 +105,17 @@ async function sendMessage() {
     scrollToBottom(true);
 
     input.value = "";
-    input.focus();
 
+    if (fileInput) {
+        fileInput.value = "";
+    }
+
+    const filePreview = document.getElementById("filePreview");
+    if (filePreview) {
+        filePreview.innerHTML = "";
+    }
+
+    input.focus();
 
     /***** MENSAJE "ESCRIBIENDO" *****/
     const typingMessage = document.createElement("div");
@@ -98,15 +134,19 @@ async function sendMessage() {
     scrollToBottom(true);
 
     try {
+
+        // 🔥 USAMOS FORMDATA
+        const formData = new FormData();
+        formData.append("message", userText);
+        formData.append("threadId", localStorage.getItem("usuarioLogueado") || "anonimo");
+
+        if (file) {
+            formData.append("file", file);
+        }
+
         const response = await fetch(NOVA_URL, {
             method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-                message: userText,
-                threadId: localStorage.getItem("usuarioLogueado") || "anonimo"
-            })
+            body: formData
         });
 
         let data;
@@ -119,7 +159,6 @@ async function sendMessage() {
 
         typingMessage.remove();
 
-        /***** RESPUESTA BOT *****/
         const botMessage = document.createElement("div");
         botMessage.classList.add("message", "bot");
 
@@ -136,6 +175,7 @@ async function sendMessage() {
         scrollToBottom(true);
 
     } catch (error) {
+
         typingMessage.remove();
 
         const errorMessage = document.createElement("div");
@@ -158,7 +198,10 @@ async function sendMessage() {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
+
     const userInput = document.getElementById("userInput");
+    const fileInput = document.getElementById("fileInput");
+    const filePreview = document.getElementById("filePreview");
 
     if (userInput) {
         userInput.addEventListener("keydown", function (e) {
@@ -171,10 +214,48 @@ document.addEventListener("DOMContentLoaded", () => {
         userInput.focus();
     }
 
+    if (fileInput && filePreview) {
+        fileInput.addEventListener("change", function () {
+
+            filePreview.innerHTML = "";
+
+            if (this.files.length > 0) {
+
+                const file = this.files[0];
+
+                const chip = document.createElement("div");
+                chip.classList.add("file-chip");
+
+                chip.innerHTML = `
+                    📎 ${file.name}
+                    <button onclick="removeFile()">✖</button>
+                `;
+
+                filePreview.appendChild(chip);
+            }
+        });
+    }
+
     scrollToBottom(true);
 });
 
+function removeFile() {
+    const fileInput = document.getElementById("fileInput");
+    const filePreview = document.getElementById("filePreview");
 
+    if (fileInput) fileInput.value = "";
+    if (filePreview) filePreview.innerHTML = "";
+}
+
+const fileInput = document.getElementById("fileInput");
+
+if (fileInput) {
+    fileInput.addEventListener("change", function () {
+        if (this.files.length > 0) {
+            console.log("Archivo seleccionado:", this.files[0].name);
+        }
+    });
+}
 
 /* SEGURIDAD BÁSICA */
 window.onload = function () {
