@@ -30,42 +30,39 @@
 
     <main class="main-content-bot">
 
-        <section class="chatbot-card">
-
-            <div class="chat-header">
-
-                <div class="bot-info">
-                    <div class="bot-avatar">
-                        <img src="img/bot.png" alt="NOVA">
-                    </div>
-
-                    <div>
-                        <h3>NOVA IA</h3>
-                        <span class="status-online">En línea</span>
-                    </div>
-                </div>
-
-            </div>
-
+        <section class="chatbot-full">
 
             <div class="chat-messages" id="chatMessages">
+
                 <div class="message bot">
-                    👋 Hola, soy Asistente de Gestion de Requerimientos.
-                    <br><br>
-                    Le ayudaré a crear su requerimiento paso a paso.
-                    <br><br>
-                    ¿Cuál es su nombre?🙂
+                    <div class="message-icon">
+                        <img src="img/bot.png" alt="Bot">
+                    </div>
+
+                    <div class="message-content">
+                        👋 Hola, soy Asistente de Gestión de Requerimientos.
+                        <br><br>
+                        Le ayudaré a crear su requerimiento paso a paso.
+                        <br><br>
+                        ¿Cuál es su nombre? 🙂
+                    </div>
                 </div>
+
             </div>
 
             <div class="chat-input-area">
-                <textarea id="userInput" placeholder="Escribe tu mensaje aquí..."></textarea>
-                <button onclick="sendMessage()">Enviar</button>
+                <div class="input-box">
+                    <textarea id="userInput" placeholder="Pregunta lo que quieras" rows="1">
+                </textarea>
+
+                    <button onclick="sendMessage()">➤</button>
+                </div>
             </div>
 
         </section>
 
     </main>
+
 
     <script src="js/script.js"></script>
 

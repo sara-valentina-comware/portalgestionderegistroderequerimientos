@@ -1,10 +1,24 @@
 
 const NOVA_URL = "https://n8n.comware.com.co/webhook/chat-portalgestionderegistroderequerimientos";
+function scrollToBottom(force = false) {
+    const chat = document.getElementById("chatMessages");
+    if (!chat) return;
+
+    const isNearBottom =
+        chat.scrollHeight - chat.scrollTop - chat.clientHeight < 80;
+
+    if (force || isNearBottom) {
+        requestAnimationFrame(() => {
+            chat.scrollTop = chat.scrollHeight;
+        });
+    }
+}
 
 
+/* LOGIN / LOGOUT */
 function login() {
-    const usuario = document.getElementById("usuario").value.trim();
-    const password = document.getElementById("password").value.trim();
+    const usuario = document.getElementById("usuario")?.value.trim();
+    const password = document.getElementById("password")?.value.trim();
 
     if (usuario === "admin" && password === "12345") {
         localStorage.setItem("usuarioLogueado", usuario);
@@ -23,30 +37,65 @@ function irNuevo() {
     window.location.href = "nuevo.html";
 }
 
-//INTEGRACIÓN DE NOVA (n8n)
+function irResultado() {
+    window.location.href = "resultado.html";
+}
+
+function editar() {
+    window.location.href = "nuevo.html";
+}
+
+function nuevoRequerimiento() {
+    localStorage.removeItem("reqTemporal");
+    window.location.href = "nuevo.html";
+}
+
+
+/* CHATBOT */
 async function sendMessage() {
     const input = document.getElementById("userInput");
     const chat = document.getElementById("chatMessages");
 
+    if (!input || !chat) return;
     if (input.value.trim() === "") return;
 
-    const userText = input.value;
+    const userText = input.value.trim();
 
-    // Mensaje usuario
+    /***** MENSAJE USUARIO *****/
     const userMessage = document.createElement("div");
     userMessage.classList.add("message", "user");
-    userMessage.textContent = userText;
+
+    userMessage.innerHTML = `
+        <div class="message-content">
+            ${userText}
+        </div>
+        <div class="message-icon">
+            <img src="img/avatar.png" alt="Usuario">
+        </div>
+    `;
+
     chat.appendChild(userMessage);
+    scrollToBottom(true);
 
-    chat.scrollTop = chat.scrollHeight;
     input.value = "";
+    input.focus();
 
-    // Mensaje temporal "escribiendo..."
+
+    /***** MENSAJE "ESCRIBIENDO" *****/
     const typingMessage = document.createElement("div");
-    typingMessage.classList.add("message", "bot");
-    typingMessage.textContent = "NOVA está escribiendo...";
+    typingMessage.classList.add("message", "bot", "typing");
+
+    typingMessage.innerHTML = `
+        <div class="message-icon">
+            <img src="img/bot.png" alt="NOVA">
+        </div>
+        <div class="message-content">
+            NOVA está escribiendo...
+        </div>
+    `;
+
     chat.appendChild(typingMessage);
-    chat.scrollTop = chat.scrollHeight;
+    scrollToBottom(true);
 
     try {
         const response = await fetch(NOVA_URL, {
@@ -60,161 +109,81 @@ async function sendMessage() {
             })
         });
 
-        const data = await response.json();
+        let data;
 
-        // Quitar "escribiendo..."
+        try {
+            data = await response.json();
+        } catch {
+            data = { reply: "Respuesta inválida de NOVA." };
+        }
+
         typingMessage.remove();
 
-        // Respuesta bot
+        /***** RESPUESTA BOT *****/
         const botMessage = document.createElement("div");
         botMessage.classList.add("message", "bot");
-        botMessage.innerHTML = data.reply || "NOVA no respondió.";
-        chat.appendChild(botMessage);
 
-        chat.scrollTop = chat.scrollHeight;
+        botMessage.innerHTML = `
+            <div class="message-icon">
+                <img src="img/bot.png" alt="NOVA">
+            </div>
+            <div class="message-content">
+                ${data.reply || "NOVA no respondió."}
+            </div>
+        `;
+
+        chat.appendChild(botMessage);
+        scrollToBottom(true);
 
     } catch (error) {
         typingMessage.remove();
 
         const errorMessage = document.createElement("div");
         errorMessage.classList.add("message", "bot");
-        errorMessage.textContent = "Error al conectar con NOVA.";
-        chat.appendChild(errorMessage);
 
-        chat.scrollTop = chat.scrollHeight;
+        errorMessage.innerHTML = `
+            <div class="message-icon">
+                <img src="img/bot.png" alt="NOVA">
+            </div>
+            <div class="message-content">
+                Error al conectar con NOVA.
+            </div>
+        `;
+
+        chat.appendChild(errorMessage);
+        scrollToBottom(true);
 
         console.error("Error NOVA:", error);
     }
 }
 
+document.addEventListener("DOMContentLoaded", () => {
+    const userInput = document.getElementById("userInput");
 
-function irPreview() {
-    const data = {
-        titulo: document.getElementById("titulo").value.trim(),
-        problema: document.getElementById("problema").value.trim(),
-        descripcion: document.getElementById("descripcion").value.trim(),
-        alcance: document.getElementById("alcance").value.trim(),
-        centro_costos: document.getElementById("centro_costos").value,
-        criterios: document.getElementById("criterios").value.trim(),
-        beneficio: document.getElementById("beneficio").value.trim()
-    };
+    if (userInput) {
+        userInput.addEventListener("keydown", function (e) {
+            if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
 
-    if (!data.titulo || !data.problema || !data.descripcion) {
-        alert("Por favor complete los campos obligatorios (*)");
-        return;
+        userInput.focus();
     }
 
-    localStorage.setItem("reqTemporal", JSON.stringify(data));
-
-    window.location.href = "preview.html";
-}
-
-
-function irResultado() {
-    window.location.href = "resultado.html";
-}
-
-function editar() {
-    window.location.href = "nuevo.html";
-}
-
-function cargarFormulario() {
-    const data = JSON.parse(localStorage.getItem("reqTemporal"));
-
-    // Si hay datos, los carga; si no, mantiene los campos vacíos
-    if (data) {
-        document.getElementById("titulo").value = data.titulo || "";
-        document.getElementById("problema").value = data.problema || "";
-        document.getElementById("descripcion").value = data.descripcion || "";
-        document.getElementById("alcance").value = data.alcance || "";
-        document.getElementById("centro_costos").value = data.centro_costos || "";
-        document.getElementById("criterios").value = data.criterios || "";
-        document.getElementById("beneficio").value = data.beneficio || "";
-    } else {
-        // Limpiar todos los campos por si hay datos previos
-        document.getElementById("titulo").value = "";
-        document.getElementById("problema").value = "";
-        document.getElementById("descripcion").value = "";
-        document.getElementById("alcance").value = "";
-        document.getElementById("centro_costos").value = "";
-        document.getElementById("criterios").value = "";
-        document.getElementById("beneficio").value = "";
-    }
-}
-
-function nuevoRequerimiento() {
-    localStorage.removeItem("reqTemporal");
-    window.location.href = "nuevo.html";
-}
-
-// Al cargar la página
-if (window.location.pathname.includes("nuevo.html")) {
-    cargarFormulario();
-}
-
-function cargarResultado() {
-
-    const data = JSON.parse(localStorage.getItem("reqTemporal"));
-
-    if (!data) {
-        document.getElementById("resultadoContenido").innerHTML =
-            "No se encontró información del requerimiento.";
-        return;
-    }
-
-    const documento = `
-        <h2>${data.titulo}</h2>
-
-        <hr>
-
-        <h3>1. Información General</h3>
-        <p><strong>Centro de Costos:</strong> ${data.centro_costos}</p>
-
-        <hr>
-
-        <h3>2. Problema Actual</h3>
-        <p>${data.problema}</p>
-
-        <h3>3. Descripción del Requerimiento</h3>
-        <p>${data.descripcion}</p>
-
-        <hr>
-
-        <h3>4. Alcance</h3>
-        <p>${data.alcance}</p>
-
-        <h3>5. Criterios de Aceptación</h3>
-        <p>${data.criterios}</p>
-
-        <hr>
-
-        <h3>7. Beneficio Esperado</h3>
-        <p>${data.beneficio}</p>
-
-        <hr>
-
-        <p><strong>Conclusión:</strong> 
-        El requerimiento se encuentra listo para aprobación y envío a JIRA.
-        </p>
-    `;
-
-    document.getElementById("resultadoContenido").innerHTML = documento;
-}
-
-if (window.location.pathname.includes("resultado.html")) {
-    cargarResultado();
-}
+    scrollToBottom(true);
+});
 
 
 
 /* SEGURIDAD BÁSICA */
-
 window.onload = function () {
     const usuario = localStorage.getItem("usuarioLogueado");
     const paginaActual = window.location.pathname;
 
-    // Si no hay usuario logueado y no estamos en index.html, redirige
     if (!usuario && !paginaActual.includes("index.html")) {
         window.location.href = "index.html";
     }
+
+    scrollToBottom(true);
 };
