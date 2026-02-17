@@ -1,9 +1,10 @@
-/* =========================
-   CONFIGURACIÓN
-   ========================= */
+
 const API_URL = "http://localhost:3000";
 const NOVA_URL = "https://n8n.comware.com.co/webhook/chat-portalgestionderegistroderequerimientos";
 
+function generarThreadId() {
+    return "thread_" + Date.now();
+}
 
 /* =========================
    SCROLL CHAT
@@ -23,7 +24,9 @@ function scrollToBottom(force = false) {
 }
 
 
-/* LOGIN */
+/* =========================
+   LOGIN
+   ========================= */
 async function login() {
 
     const usuario = document.getElementById("usuario")?.value.trim();
@@ -63,19 +66,28 @@ async function login() {
 }
 
 
-/* LOGOUT */
+/* =========================
+   LOGOUT
+   ========================= */
 function logout() {
     localStorage.removeItem("usuarioLogueado");
     localStorage.removeItem("ultimaActividad");
+    localStorage.removeItem("threadId");
+
     window.location.replace("index.html");
 }
 
 
-/* NAVEGACIÓN */
+/* =========================
+   NAVEGACIÓN
+   ========================= */
 function irNuevo() {
     window.location.href = "nuevo.html";
 }
-
+function irMisRequerimientos() {
+    localStorage.removeItem("reqTemporal");
+    window.location.href = "misRequerimientos.html";
+}
 function irResultado() {
     window.location.href = "resultado.html";
 }
@@ -90,8 +102,10 @@ function nuevoRequerimiento() {
 }
 
 
-/* CONTROL DE INACTIVIDAD */
-const TIEMPO_EXPIRACION = 10 * 60 * 1000; // 10 minutos
+/* =========================
+   CONTROL DE INACTIVIDAD
+   ========================= */
+const TIEMPO_EXPIRACION = 10 * 60 * 1000;
 
 function actualizarActividad() {
     localStorage.setItem("ultimaActividad", Date.now());
@@ -114,22 +128,23 @@ function verificarInactividad() {
 function cerrarSesionPorInactividad() {
     localStorage.removeItem("usuarioLogueado");
     localStorage.removeItem("ultimaActividad");
+    localStorage.removeItem("threadId");
 
     alert("Sesión cerrada por inactividad⏳");
 
     window.location.replace("index.html");
 }
 
-// Detectores de actividad
 ["click", "mousemove", "keydown", "scroll", "touchstart"]
     .forEach(evento => {
         document.addEventListener(evento, actualizarActividad);
     });
 
 
-/* CHATBOT NOVA */
+/* =========================
+   CHATBOT NOVA (modificado)
+   ========================= */
 async function sendMessage() {
-
     const input = document.getElementById("userInput");
     const chat = document.getElementById("chatMessages");
     const fileInput = document.getElementById("fileInput");
@@ -143,10 +158,9 @@ async function sendMessage() {
 
     actualizarActividad();
 
-    /***** MENSAJE USUARIO *****/
+    // Mensaje del usuario
     const userMessage = document.createElement("div");
     userMessage.classList.add("message", "user");
-
     userMessage.innerHTML = `
         <div class="message-content">
             ${userText || ""}
@@ -156,52 +170,35 @@ async function sendMessage() {
             <img src="img/avatar.png" alt="Usuario">
         </div>
     `;
-
     chat.appendChild(userMessage);
     scrollToBottom(true);
 
     input.value = "";
     if (fileInput) fileInput.value = "";
-
     const filePreview = document.getElementById("filePreview");
     if (filePreview) filePreview.innerHTML = "";
-
     input.focus();
 
-    /***** "NOVA escribiendo..." *****/
+    // Mensaje "NOVA está escribiendo..."
     const typingMessage = document.createElement("div");
     typingMessage.classList.add("message", "bot", "typing");
-
     typingMessage.innerHTML = `
         <div class="message-icon">
             <img src="img/bot.png" alt="NOVA">
         </div>
-        <div class="message-content">
-            NOVA está escribiendo...
-        </div>
+        <div class="message-content">NOVA está escribiendo...</div>
     `;
-
     chat.appendChild(typingMessage);
     scrollToBottom(true);
 
     try {
-
         const formData = new FormData();
         formData.append("message", userText);
-        formData.append(
-            "threadId",
-            localStorage.getItem("usuarioLogueado") || "anonimo"
-        );
-
+        formData.append("threadId", localStorage.getItem("threadId"));
         if (file) formData.append("file", file);
 
-        const response = await fetch(NOVA_URL, {
-            method: "POST",
-            body: formData
-        });
-
+        const response = await fetch(NOVA_URL, { method: "POST", body: formData });
         let data;
-
         try {
             data = await response.json();
         } catch {
@@ -213,43 +210,72 @@ async function sendMessage() {
         const botMessage = document.createElement("div");
         botMessage.classList.add("message", "bot");
 
-        botMessage.innerHTML = `
-            <div class="message-icon">
-                <img src="img/bot.png" alt="NOVA">
-            </div>
-            <div class="message-content">
-                ${data.reply || "NOVA no respondió."}
-            </div>
-        `;
+        const messageIcon = document.createElement("div");
+        messageIcon.classList.add("message-icon");
+        messageIcon.innerHTML = `<img src="img/bot.png" alt="NOVA">`;
 
+        const messageContent = document.createElement("div");
+        messageContent.classList.add("message-content");
+
+        // Aquí aplicamos el formateo
+        const replyContent = formatMessage(data.reply);
+        messageContent.innerHTML = replyContent;
+
+        botMessage.appendChild(messageIcon);
+        botMessage.appendChild(messageContent);
         chat.appendChild(botMessage);
         scrollToBottom(true);
 
     } catch (error) {
-
         typingMessage.remove();
-
         const errorMessage = document.createElement("div");
         errorMessage.classList.add("message", "bot");
-
         errorMessage.innerHTML = `
             <div class="message-icon">
                 <img src="img/bot.png" alt="NOVA">
             </div>
-            <div class="message-content">
-                Error al conectar con NOVA.
-            </div>
+            <div class="message-content">❌ Error al conectar con NOVA.</div>
         `;
-
         chat.appendChild(errorMessage);
         scrollToBottom(true);
-
         console.error("Error NOVA:", error);
     }
 }
 
 
-/* DOM READY */
+/* =========================
+   FORMATEO DE MENSAJES
+   ========================= */
+function formatMessage(text) {
+    if (!text) return "";
+    let formatted = text
+        .replace(/hola/gi, "👋 Hola")
+        .replace(/gracias/gi, "🙏 Gracias")
+        .replace(/incidente/gi, "⚠️ Incidente")
+        .replace(/requerimiento/gi, "📝 Requerimiento");
+
+    // Convertir saltos de línea en <br>
+    formatted = formatted.replace(/\n/g, "<br>");
+
+    return formatted;
+}
+
+
+/* =========================
+   REMOVE FILE
+   ========================= */
+function removeFile() {
+    const fileInput = document.getElementById("fileInput");
+    const filePreview = document.getElementById("filePreview");
+
+    if (fileInput) fileInput.value = "";
+    if (filePreview) filePreview.innerHTML = "";
+}
+
+
+/* =========================
+   DOM READY
+   ========================= */
 document.addEventListener("DOMContentLoaded", () => {
 
     const usuario = localStorage.getItem("usuarioLogueado");
@@ -271,10 +297,22 @@ document.addEventListener("DOMContentLoaded", () => {
 
     localStorage.setItem("ultimaActividad", Date.now());
 
-    // Verificar inactividad cada 30s
+    localStorage.setItem("threadId", generarThreadId());
+
     setInterval(verificarInactividad, 30000);
 
-    /* ENTER para enviar mensaje */
+    /* ENTER en LOGIN */
+    const passwordInput = document.getElementById("password");
+    if (passwordInput) {
+        passwordInput.addEventListener("keydown", e => {
+            if (e.key === "Enter") {
+                e.preventDefault();
+                login();
+            }
+        });
+    }
+
+    /* ENTER chat */
     const userInput = document.getElementById("userInput");
     if (userInput) {
         userInput.addEventListener("keydown", e => {
@@ -317,17 +355,9 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 
-/* REMOVE FILE */
-function removeFile() {
-    const fileInput = document.getElementById("fileInput");
-    const filePreview = document.getElementById("filePreview");
-
-    if (fileInput) fileInput.value = "";
-    if (filePreview) filePreview.innerHTML = "";
-}
-
-
-/* SEGURIDAD BÁSICA*/
+/* =========================
+   SEGURIDAD BÁSICA
+   ========================= */
 document.addEventListener("DOMContentLoaded", () => {
 
     const usuario = localStorage.getItem("usuarioLogueado");

@@ -412,7 +412,12 @@ body {
     font-weight: 700;
     text-align: center;
 }
-
+.page-header p {
+    color: #000000;
+    font-size: 15px;
+    text-align: center;
+    padding-bottom: 15px;
+}
 .status-badge {
     display: inline-block;
     padding: 8px 16px;

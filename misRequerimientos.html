@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="css/styles.css">
     <link rel="icon" href="img/icono.png">
-    <title>Registro de Requerimientos</title>
+    <title>Mis Requerimientos</title>
 </head>
 
 <body class="preview-page">
@@ -30,29 +30,24 @@
     <main class="main-content">
 
         <section class="page-header">
-            <h1>Validación de Información</h1>
-            <p>La IA analiza si la información suministrada es suficiente para continuar.</p>
+            <h1>Mis Requerimientos</h1>
+            <p>Aquí se listan los requerimientos enviados desde el chatbot.</p>
         </section>
 
-        <section class="preview-card">
-            <div class="status-badge warning">Información en análisis</div>
-
-            <div class="preview-content" id="previewContenido">
-                Aquí aparecerá el análisis generado por la IA...
+        <section class="preview-card">    
+            <div class="preview-content" id="listaRequerimientos">
+                No hay requerimientos registrados todavía...
             </div>
 
             <div class="actions-buttons">
-                <button onclick="editar()">Editar</button>
-                <button class="btn-primary" onclick="irResultado()">
-                    Continuar
-                </button>
-
+                <button onclick="nuevoRequerimiento()">➕ Nuevo Requerimiento</button>
             </div>
         </section>
 
     </main>
 
     <script src="js/script.js"></script>
+    <script src="js/misRequerimientos.js"></script>
 </body>
 
 </html>
