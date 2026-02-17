@@ -1,5 +1,13 @@
-
+/* =========================
+   CONFIGURACIÓN
+   ========================= */
+const API_URL = "http://localhost:3000";
 const NOVA_URL = "https://n8n.comware.com.co/webhook/chat-portalgestionderegistroderequerimientos";
+
+
+/* =========================
+   SCROLL CHAT
+   ========================= */
 function scrollToBottom(force = false) {
     const chat = document.getElementById("chatMessages");
     if (!chat) return;
@@ -15,18 +23,19 @@ function scrollToBottom(force = false) {
 }
 
 
-/* LOGIN / LOGOUT */
+/* LOGIN */
 async function login() {
+
     const usuario = document.getElementById("usuario")?.value.trim();
     const password = document.getElementById("password")?.value.trim();
 
     if (!usuario || !password) {
-        alert("Por favor ingrese usuario y contraseña");
+        alert("Por favor completa usuario y contraseña");
         return;
     }
 
     try {
-        const response = await fetch("http://localhost:3000/login", {
+        const response = await fetch(`${API_URL}/login`, {
             method: "POST",
             headers: {
                 "Content-Type": "application/json"
@@ -37,8 +46,12 @@ async function login() {
         const data = await response.json();
 
         if (data.success) {
+
             localStorage.setItem("usuarioLogueado", usuario);
-            window.location.href = "inicio.html";
+            localStorage.setItem("ultimaActividad", Date.now());
+
+            window.location.replace("inicio.html");
+
         } else {
             alert("Usuario o contraseña incorrectos");
         }
@@ -50,11 +63,15 @@ async function login() {
 }
 
 
+/* LOGOUT */
 function logout() {
     localStorage.removeItem("usuarioLogueado");
-    window.location.href = "index.html";
+    localStorage.removeItem("ultimaActividad");
+    window.location.replace("index.html");
 }
 
+
+/* NAVEGACIÓN */
 function irNuevo() {
     window.location.href = "nuevo.html";
 }
@@ -73,8 +90,46 @@ function nuevoRequerimiento() {
 }
 
 
-/* CHATBOT */
+/* CONTROL DE INACTIVIDAD */
+const TIEMPO_EXPIRACION = 10 * 60 * 1000; // 10 minutos
+
+function actualizarActividad() {
+    localStorage.setItem("ultimaActividad", Date.now());
+}
+
+function verificarInactividad() {
+    const ultimaActividad = localStorage.getItem("ultimaActividad");
+    const usuario = localStorage.getItem("usuarioLogueado");
+
+    if (!usuario || !ultimaActividad) return;
+
+    const ahora = Date.now();
+    const tiempoInactivo = ahora - parseInt(ultimaActividad);
+
+    if (tiempoInactivo > TIEMPO_EXPIRACION) {
+        cerrarSesionPorInactividad();
+    }
+}
+
+function cerrarSesionPorInactividad() {
+    localStorage.removeItem("usuarioLogueado");
+    localStorage.removeItem("ultimaActividad");
+
+    alert("Sesión cerrada por inactividad⏳");
+
+    window.location.replace("index.html");
+}
+
+// Detectores de actividad
+["click", "mousemove", "keydown", "scroll", "touchstart"]
+    .forEach(evento => {
+        document.addEventListener(evento, actualizarActividad);
+    });
+
+
+/* CHATBOT NOVA */
 async function sendMessage() {
+
     const input = document.getElementById("userInput");
     const chat = document.getElementById("chatMessages");
     const fileInput = document.getElementById("fileInput");
@@ -84,8 +139,9 @@ async function sendMessage() {
     const userText = input.value.trim();
     const file = fileInput?.files[0];
 
-    // Permitir enviar si hay texto o archivo
     if (!userText && !file) return;
+
+    actualizarActividad();
 
     /***** MENSAJE USUARIO *****/
     const userMessage = document.createElement("div");
@@ -105,19 +161,14 @@ async function sendMessage() {
     scrollToBottom(true);
 
     input.value = "";
-
-    if (fileInput) {
-        fileInput.value = "";
-    }
+    if (fileInput) fileInput.value = "";
 
     const filePreview = document.getElementById("filePreview");
-    if (filePreview) {
-        filePreview.innerHTML = "";
-    }
+    if (filePreview) filePreview.innerHTML = "";
 
     input.focus();
 
-    /***** MENSAJE "ESCRIBIENDO" *****/
+    /***** "NOVA escribiendo..." *****/
     const typingMessage = document.createElement("div");
     typingMessage.classList.add("message", "bot", "typing");
 
@@ -135,14 +186,14 @@ async function sendMessage() {
 
     try {
 
-        // 🔥 USAMOS FORMDATA
         const formData = new FormData();
         formData.append("message", userText);
-        formData.append("threadId", localStorage.getItem("usuarioLogueado") || "anonimo");
+        formData.append(
+            "threadId",
+            localStorage.getItem("usuarioLogueado") || "anonimo"
+        );
 
-        if (file) {
-            formData.append("file", file);
-        }
+        if (file) formData.append("file", file);
 
         const response = await fetch(NOVA_URL, {
             method: "POST",
@@ -197,14 +248,36 @@ async function sendMessage() {
     }
 }
 
+
+/* DOM READY */
 document.addEventListener("DOMContentLoaded", () => {
 
-    const userInput = document.getElementById("userInput");
-    const fileInput = document.getElementById("fileInput");
-    const filePreview = document.getElementById("filePreview");
+    const usuario = localStorage.getItem("usuarioLogueado");
+    const paginaActual = window.location.pathname;
 
+    const enLogin =
+        paginaActual.includes("index.html") ||
+        paginaActual.endsWith("/");
+
+    if (!usuario && !enLogin) {
+        window.location.replace("index.html");
+        return;
+    }
+
+    if (usuario && enLogin) {
+        window.location.replace("inicio.html");
+        return;
+    }
+
+    localStorage.setItem("ultimaActividad", Date.now());
+
+    // Verificar inactividad cada 30s
+    setInterval(verificarInactividad, 30000);
+
+    /* ENTER para enviar mensaje */
+    const userInput = document.getElementById("userInput");
     if (userInput) {
-        userInput.addEventListener("keydown", function (e) {
+        userInput.addEventListener("keydown", e => {
             if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
                 sendMessage();
@@ -213,6 +286,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
         userInput.focus();
     }
+
+    /* Preview archivo */
+    const fileInput = document.getElementById("fileInput");
+    const filePreview = document.getElementById("filePreview");
 
     if (fileInput && filePreview) {
         fileInput.addEventListener("change", function () {
@@ -239,6 +316,8 @@ document.addEventListener("DOMContentLoaded", () => {
     scrollToBottom(true);
 });
 
+
+/* REMOVE FILE */
 function removeFile() {
     const fileInput = document.getElementById("fileInput");
     const filePreview = document.getElementById("filePreview");
@@ -247,24 +326,25 @@ function removeFile() {
     if (filePreview) filePreview.innerHTML = "";
 }
 
-const fileInput = document.getElementById("fileInput");
 
-if (fileInput) {
-    fileInput.addEventListener("change", function () {
-        if (this.files.length > 0) {
-            console.log("Archivo seleccionado:", this.files[0].name);
-        }
-    });
-}
+/* SEGURIDAD BÁSICA*/
+document.addEventListener("DOMContentLoaded", () => {
 
-/* SEGURIDAD BÁSICA */
-window.onload = function () {
     const usuario = localStorage.getItem("usuarioLogueado");
     const paginaActual = window.location.pathname;
 
-    if (!usuario && !paginaActual.includes("index.html")) {
-        window.location.href = "index.html";
+    const enLogin =
+        paginaActual.includes("index.html") ||
+        paginaActual.endsWith("/");
+
+    if (!usuario && !enLogin) {
+        window.location.replace("index.html");
+        return;
+    }
+    if (usuario && enLogin) {
+        window.location.replace("inicio.html");
+        return;
     }
 
-    scrollToBottom(true);
-};
+    console.log("✅Sesión válida:", usuario);
+});
