@@ -6,9 +6,6 @@ function generarThreadId() {
     return "thread_" + Date.now();
 }
 
-/* =========================
-   SCROLL CHAT
-   ========================= */
 function scrollToBottom(force = false) {
     const chat = document.getElementById("chatMessages");
     if (!chat) return;
@@ -281,24 +278,25 @@ document.addEventListener("DOMContentLoaded", () => {
     const usuario = localStorage.getItem("usuarioLogueado");
     const paginaActual = window.location.pathname;
 
-    const enLogin =
-        paginaActual.includes("index.html") ||
-        paginaActual.endsWith("/");
+    const enLogin = paginaActual.includes("index.html") || paginaActual.endsWith("/");
 
+    // Si no hay usuario y NO estamos en login -> enviar a login
     if (!usuario && !enLogin) {
         window.location.replace("index.html");
         return;
     }
 
+    // Si hay usuario y estamos en login -> enviar a inicio
     if (usuario && enLogin) {
         window.location.replace("inicio.html");
         return;
     }
 
+    // Inicialización normal
+    console.log("✅ Sesión válida:", usuario);
+
     localStorage.setItem("ultimaActividad", Date.now());
-
     localStorage.setItem("threadId", generarThreadId());
-
     setInterval(verificarInactividad, 30000);
 
     /* ENTER en LOGIN */
@@ -312,7 +310,7 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
-    /* ENTER chat */
+    /* ENTER en chat */
     const userInput = document.getElementById("userInput");
     if (userInput) {
         userInput.addEventListener("keydown", e => {
@@ -321,7 +319,6 @@ document.addEventListener("DOMContentLoaded", () => {
                 sendMessage();
             }
         });
-
         userInput.focus();
     }
 
@@ -335,16 +332,12 @@ document.addEventListener("DOMContentLoaded", () => {
             filePreview.innerHTML = "";
 
             if (this.files.length > 0) {
-
                 const file = this.files[0];
 
                 const chip = document.createElement("div");
                 chip.classList.add("file-chip");
 
-                chip.innerHTML = `
-                    📎 ${file.name}
-                    <button onclick="removeFile()">✖</button>
-                `;
+                chip.innerHTML = `📎 ${file.name} <button onclick="removeFile()">✖</button>`;
 
                 filePreview.appendChild(chip);
             }
@@ -353,6 +346,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     scrollToBottom(true);
 });
+
 
 
 /* =========================
