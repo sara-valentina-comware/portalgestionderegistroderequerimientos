@@ -1,7 +1,13 @@
-
+/* =========================
+   CONFIGURACIÓN
+   ========================= */
 const API_URL = "http://localhost:3000";
 const NOVA_URL = "https://n8n.comware.com.co/webhook/chat-portalgestionderegistroderequerimientos";
 
+
+/* =========================
+   UTILIDADES
+   ========================= */
 function generarThreadId() {
     return "thread_" + Date.now();
 }
@@ -25,7 +31,6 @@ function scrollToBottom(force = false) {
    LOGIN
    ========================= */
 async function login() {
-
     const usuario = document.getElementById("usuario")?.value.trim();
     const password = document.getElementById("password")?.value.trim();
 
@@ -46,12 +51,11 @@ async function login() {
         const data = await response.json();
 
         if (data.success) {
-
             localStorage.setItem("usuarioLogueado", usuario);
             localStorage.setItem("ultimaActividad", Date.now());
+            localStorage.setItem("threadId", generarThreadId());
 
-            window.location.replace("inicio.html");
-
+            window.location.href = "inicio.html";
         } else {
             alert("Usuario o contraseña incorrectos");
         }
@@ -71,7 +75,7 @@ function logout() {
     localStorage.removeItem("ultimaActividad");
     localStorage.removeItem("threadId");
 
-    window.location.replace("index.html");
+    window.location.href = "index.html";
 }
 
 
@@ -81,10 +85,12 @@ function logout() {
 function irNuevo() {
     window.location.href = "nuevo.html";
 }
+
 function irMisRequerimientos() {
     localStorage.removeItem("reqTemporal");
     window.location.href = "misRequerimientos.html";
 }
+
 function irResultado() {
     window.location.href = "resultado.html";
 }
@@ -127,11 +133,11 @@ function cerrarSesionPorInactividad() {
     localStorage.removeItem("ultimaActividad");
     localStorage.removeItem("threadId");
 
-    alert("Sesión cerrada por inactividad⏳");
-
-    window.location.replace("index.html");
+    alert("Sesión cerrada por inactividad ⏳");
+    window.location.href = "index.html";
 }
 
+// Detectores de actividad
 ["click", "mousemove", "keydown", "scroll", "touchstart"]
     .forEach(evento => {
         document.addEventListener(evento, actualizarActividad);
@@ -139,7 +145,7 @@ function cerrarSesionPorInactividad() {
 
 
 /* =========================
-   CHATBOT NOVA (modificado)
+   CHATBOT NOVA
    ========================= */
 async function sendMessage() {
     const input = document.getElementById("userInput");
@@ -155,7 +161,6 @@ async function sendMessage() {
 
     actualizarActividad();
 
-    // Mensaje del usuario
     const userMessage = document.createElement("div");
     userMessage.classList.add("message", "user");
     userMessage.innerHTML = `
@@ -172,11 +177,12 @@ async function sendMessage() {
 
     input.value = "";
     if (fileInput) fileInput.value = "";
+
     const filePreview = document.getElementById("filePreview");
     if (filePreview) filePreview.innerHTML = "";
+
     input.focus();
 
-    // Mensaje "NOVA está escribiendo..."
     const typingMessage = document.createElement("div");
     typingMessage.classList.add("message", "bot", "typing");
     typingMessage.innerHTML = `
@@ -194,7 +200,11 @@ async function sendMessage() {
         formData.append("threadId", localStorage.getItem("threadId"));
         if (file) formData.append("file", file);
 
-        const response = await fetch(NOVA_URL, { method: "POST", body: formData });
+        const response = await fetch(NOVA_URL, {
+            method: "POST",
+            body: formData
+        });
+
         let data;
         try {
             data = await response.json();
@@ -207,34 +217,35 @@ async function sendMessage() {
         const botMessage = document.createElement("div");
         botMessage.classList.add("message", "bot");
 
-        const messageIcon = document.createElement("div");
-        messageIcon.classList.add("message-icon");
-        messageIcon.innerHTML = `<img src="img/bot.png" alt="NOVA">`;
+        botMessage.innerHTML = `
+            <div class="message-icon">
+                <img src="img/bot.png" alt="NOVA">
+            </div>
+            <div class="message-content">
+                ${formatMessage(data.reply)}
+            </div>
+        `;
 
-        const messageContent = document.createElement("div");
-        messageContent.classList.add("message-content");
-
-        // Aquí aplicamos el formateo
-        const replyContent = formatMessage(data.reply);
-        messageContent.innerHTML = replyContent;
-
-        botMessage.appendChild(messageIcon);
-        botMessage.appendChild(messageContent);
         chat.appendChild(botMessage);
         scrollToBottom(true);
 
     } catch (error) {
         typingMessage.remove();
+
         const errorMessage = document.createElement("div");
         errorMessage.classList.add("message", "bot");
         errorMessage.innerHTML = `
             <div class="message-icon">
                 <img src="img/bot.png" alt="NOVA">
             </div>
-            <div class="message-content">❌ Error al conectar con NOVA.</div>
+            <div class="message-content">
+                ❌ Error al conectar con NOVA.
+            </div>
         `;
+
         chat.appendChild(errorMessage);
         scrollToBottom(true);
+
         console.error("Error NOVA:", error);
     }
 }
@@ -245,13 +256,13 @@ async function sendMessage() {
    ========================= */
 function formatMessage(text) {
     if (!text) return "";
+
     let formatted = text
         .replace(/hola/gi, "👋 Hola")
         .replace(/gracias/gi, "🙏 Gracias")
         .replace(/incidente/gi, "⚠️ Incidente")
         .replace(/requerimiento/gi, "📝 Requerimiento");
 
-    // Convertir saltos de línea en <br>
     formatted = formatted.replace(/\n/g, "<br>");
 
     return formatted;
@@ -271,33 +282,27 @@ function removeFile() {
 
 
 /* =========================
-   DOM READY
+   SEGURIDAD / DOM READY
    ========================= */
 document.addEventListener("DOMContentLoaded", () => {
 
     const usuario = localStorage.getItem("usuarioLogueado");
-    const paginaActual = window.location.pathname;
+    const paginaActual = window.location.pathname.split("/").pop();
+    const enLogin = paginaActual === "index.html";
 
-    const enLogin = paginaActual.includes("index.html") || paginaActual.endsWith("/");
-
-    // Si no hay usuario y NO estamos en login -> enviar a login
+    // 🚫 Bloquear acceso si no está logueado
     if (!usuario && !enLogin) {
-        window.location.replace("index.html");
+        window.location.href = "index.html";
         return;
     }
 
-    // Si hay usuario y estamos en login -> enviar a inicio
-    if (usuario && enLogin) {
-        window.location.replace("inicio.html");
-        return;
+    // ✅ Inicializar sesión si hay usuario
+    if (usuario) {
+        console.log("✅ Sesión activa:", usuario);
+
+        localStorage.setItem("ultimaActividad", Date.now());
+        setInterval(verificarInactividad, 30000);
     }
-
-    // Inicialización normal
-    console.log("✅ Sesión válida:", usuario);
-
-    localStorage.setItem("ultimaActividad", Date.now());
-    localStorage.setItem("threadId", generarThreadId());
-    setInterval(verificarInactividad, 30000);
 
     /* ENTER en LOGIN */
     const passwordInput = document.getElementById("password");
@@ -310,7 +315,7 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
-    /* ENTER en chat */
+    /* ENTER en CHAT */
     const userInput = document.getElementById("userInput");
     if (userInput) {
         userInput.addEventListener("keydown", e => {
@@ -319,7 +324,6 @@ document.addEventListener("DOMContentLoaded", () => {
                 sendMessage();
             }
         });
-        userInput.focus();
     }
 
     /* Preview archivo */
@@ -328,7 +332,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (fileInput && filePreview) {
         fileInput.addEventListener("change", function () {
-
             filePreview.innerHTML = "";
 
             if (this.files.length > 0) {
@@ -338,37 +341,10 @@ document.addEventListener("DOMContentLoaded", () => {
                 chip.classList.add("file-chip");
 
                 chip.innerHTML = `📎 ${file.name} <button onclick="removeFile()">✖</button>`;
-
                 filePreview.appendChild(chip);
             }
         });
     }
 
     scrollToBottom(true);
-});
-
-
-
-/* =========================
-   SEGURIDAD BÁSICA
-   ========================= */
-document.addEventListener("DOMContentLoaded", () => {
-
-    const usuario = localStorage.getItem("usuarioLogueado");
-    const paginaActual = window.location.pathname;
-
-    const enLogin =
-        paginaActual.includes("index.html") ||
-        paginaActual.endsWith("/");
-
-    if (!usuario && !enLogin) {
-        window.location.replace("index.html");
-        return;
-    }
-    if (usuario && enLogin) {
-        window.location.replace("inicio.html");
-        return;
-    }
-
-    console.log("✅Sesión válida:", usuario);
 });
