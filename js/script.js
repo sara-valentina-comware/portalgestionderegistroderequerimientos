@@ -143,44 +143,26 @@ async function sendMessage() {
     const fileInput = document.getElementById("fileInput");
 
     if (!input || !chat) return;
-
     const userText = input.value.trim();
     const file = fileInput?.files[0];
     if (!userText && !file) return;
 
     actualizarActividad();
 
-    // Mensaje usuario
-    const userMessage = document.createElement("div");
-    userMessage.classList.add("message", "user");
-    userMessage.innerHTML = `
-        <div class="message-content">
-            ${userText || ""}${file ? `<br><small>📎 ${file.name}</small>` : ""}
-        </div>
-        <div class="message-icon">
-            <img src="img/avatar.png" alt="Usuario">
-        </div>
-    `;
-    chat.appendChild(userMessage);
+    // Mostrar mensaje usuario
+    const userMsg = document.createElement("div");
+    userMsg.className = "message user";
+    userMsg.innerHTML = `<div class="message-content">${userText}${file ? `<br><small>📎 ${file.name}</small>` : ""}</div><div class="message-icon"><img src="img/avatar.png"></div>`;
+    chat.appendChild(userMsg);
     scrollToBottom(true);
 
-    // Limpiar input y preview
     input.value = "";
-    if (fileInput) fileInput.value = "";
-    const filePreview = document.getElementById("filePreview");
-    if (filePreview) filePreview.innerHTML = "";
-    input.focus();
+    removeFile();
 
-    // Mensaje bot "escribiendo"
-    const typingMessage = document.createElement("div");
-    typingMessage.classList.add("message", "bot", "typing");
-    typingMessage.innerHTML = `
-        <div class="message-icon">
-            <img src="img/bot.png" alt="NOVA">
-        </div>
-        <div class="message-content">NOVA está escribiendo...</div>
-    `;
-    chat.appendChild(typingMessage);
+    const typingMsg = document.createElement("div");
+    typingMsg.className = "message bot typing";
+    typingMsg.innerHTML = `<div class="message-icon"><img src="img/bot.png"></div><div class="message-content">NOVA está escribiendo...</div>`;
+    chat.appendChild(typingMsg);
     scrollToBottom(true);
 
     try {
@@ -190,122 +172,94 @@ async function sendMessage() {
         if (file) formData.append("file", file);
 
         const response = await fetch(NOVA_URL, { method: "POST", body: formData });
-        let data;
-        try {
-            data = await response.json();
-        } catch {
-            data = { reply: "Respuesta inválida de NOVA." };
-        }
+        const data = await response.json();
+        const respuestaFinal = (data.reply || "").trim();
 
-        // Guardar Plantilla Final
-        let respuestaFinal = (data.reply || "").trim();
         if (respuestaFinal.toLowerCase().includes("plantilla final generada")) {
             const usuario = localStorage.getItem("usuarioLogueado");
             const idReq = "REQ_" + Date.now();
-            const fecha = new Date().toLocaleString();
-
             const htmlGenerado = convertirPlantillaAHTML(respuestaFinal);
+            const tituloDetectado = extraerTitulo(respuestaFinal) || "Requerimiento sin título";
 
-            // Guardar en Historial Personal
-            const historial = JSON.parse(localStorage.getItem("misRequerimientos")) || [];
-            historial.push({
+            const db = JSON.parse(localStorage.getItem(STORAGE_KEY_REQ)) || [];
+            db.push({
                 id: idReq,
-                autor: usuario,
-                fecha: fecha,
+                titulo: tituloDetectado,
+                autor: usuario, // Esencial para filtrar
+                fecha: new Date().toLocaleString(),
+                timestamp: Date.now(),
                 contenido: htmlGenerado,
                 estado: "Pendiente"
             });
-            localStorage.setItem("misRequerimientos", JSON.stringify(historial));
-
-            // Guardar en Bandeja de Validación (Admin)
-            const validacion = JSON.parse(localStorage.getItem("requerimientos")) || [];
-            validacion.push({
-                id: idReq,
-                titulo: "Requerimiento generado por chatbot",
-                autor: usuario,
-                fecha: fecha,
-                contenido: htmlGenerado,
-                estado: "Pendiente"
-            });
-            localStorage.setItem("requerimientos", JSON.stringify(validacion));
-
+            localStorage.setItem(STORAGE_KEY_REQ, JSON.stringify(db));
             localStorage.setItem("reqTemporal", htmlGenerado);
-
         }
-        typingMessage.remove();
 
-        // Mensaje bot final
-        const botMessage = document.createElement("div");
-        botMessage.classList.add("message", "bot");
-        botMessage.innerHTML = `
-            <div class="message-icon">
-                <img src="img/bot.png" alt="NOVA">
-            </div>
-            <div class="message-content">${formatMessage(data.reply)}</div>
-        `;
-        chat.appendChild(botMessage);
+        typingMsg.remove();
+        const botMsg = document.createElement("div");
+        botMsg.className = "message bot";
+        botMsg.innerHTML = `<div class="message-icon"><img src="img/bot.png"></div><div class="message-content">${formatMessage(respuestaFinal)}</div>`;
+        chat.appendChild(botMsg);
         scrollToBottom(true);
 
     } catch (error) {
-        typingMessage.remove();
-        const errorMessage = document.createElement("div");
-        errorMessage.classList.add("message", "bot");
-        errorMessage.innerHTML = `
-            <div class="message-icon">
-                <img src="img/bot.png" alt="NOVA">
-            </div>
-            <div class="message-content">Error al conectar con NOVA.</div>
-        `;
-        chat.appendChild(errorMessage);
-        scrollToBottom(true);
+        typingMsg.remove();
         console.error("Error NOVA:", error);
     }
+}
+
+function extraerTitulo(texto) {
+    if (!texto) return null;
+
+    const patrones = [
+        /Nombre del servicio:\s*(.+)/i,
+        /Nombre del Servicio:\s*(.+)/i,
+        /Servicio:\s*(.+)/i
+    ];
+
+    for (let patron of patrones) {
+        const match = texto.match(patron);
+        if (match) return match[1].trim();
+    }
+
+    return null;
 }
 
 function convertirPlantillaAHTML(texto) {
     if (!texto) return "";
 
-    let limpio = texto.replace(/^plantilla final generada:?/i, "").trim();
-    const lineas = limpio.split("\n");
+    let textoLimpio = texto.replace(/<br\s*\/?>/gi, "\n").replace(/\*/g, "");
 
-    let html = `<div class="doc-container">`;
-    html += `<div class="doc-header">REQUERIMIENTO TÉCNICO - COMWARE</div>`;
+    const lineas = textoLimpio.split("\n");
+    let html = `<div class="doc-clean-view">`;
 
-    const camposResaltados = [
-        "Nombre del Servicio o Aplicación", "Tipo de Requerimiento", "Objetivo del requerimiento",
-        "Justificación", "Beneficio esperado", "Implicación si no se atiende", "Criterios de Aceptación",
-        "Alcance Estimado", "Requerimientos Técnicos", "Aprobadores o Stakeholders Clave", "Adjuntos Relevantes",
-        "Área técnica responsable del desarrollo", "Autor del requerimiento", "Centro de Costos"
-    ];
+    lineas.forEach((linea) => {
+        let l = linea.trim();
 
-    lineas.forEach(linea => {
-        let l = linea.trim().replace(/\*\*/g, "");
-        if (l === "") return;
-
-        const esCampoClave = camposResaltados.some(campo =>
-            l.toUpperCase().startsWith(campo)
-        );
-
-        if (esCampoClave || l.includes(":")) {
-            let partes = l.split(":");
-            let label = partes[0].trim();
-            let valor = partes.slice(1).join(":").trim();
-
-            html += `
-                <div class="doc-field">
-                    <span class="doc-label">${label}${label.endsWith(':') ? '' : ':'}</span>
-                    <span class="doc-value">${valor}</span>
-                </div>`;
+        if (!l || /plantilla final generada/i.test(l)) {
+            return;
         }
-        else if (l.toUpperCase() === l && l.length > 10) {
-            html += `<h2 class="doc-title">${l}</h2>`;
+        if (l.toLowerCase().includes("plantilla para escalamiento")) {
+            html += `<h1 class="doc-main-title">${l}</h1>`;
+        }
+        else if (l.endsWith(":") ||
+            /nombre del servicio|tipo de requerimiento|objetivo|justificacion|beneficio|implicacion|descripcion funcional|criterios|alcance|requerimientos tecnicos|aprobadores|adjuntos|area tecnica|autor|centro de costos/i.test(l)) {
+
+            if (l.includes(":") && l.split(":")[1].trim().length > 1) {
+                let partes = l.split(":");
+                let label = partes[0].trim();
+                let valor = partes.slice(1).join(":").trim();
+                html += `<p class="doc-field-label"><strong>${label}:</strong></p>`;
+                html += `<p class="doc-field-value">${valor}</p>`;
+            } else {
+                html += `<p class="doc-field-label"><strong>${l}</strong></p>`;
+            }
         }
         else {
-            html += `<p class="doc-paragraph">${l}</p>`;
+            html += `<p class="doc-field-value">${l}</p>`;
         }
     });
 
-    html += `<div class="doc-footer-watermark">Generado automáticamente por NOVA AI</div>`;
     html += `</div>`;
     return html;
 }
@@ -314,10 +268,10 @@ function convertirPlantillaAHTML(texto) {
    MIS REQUERIMIENTOS
 ========================= */
 function obtenerRequerimientos() {
-    let reqs = JSON.parse(localStorage.getItem(STORAGE_KEY_REQ)) || [];
-    localStorage.setItem(STORAGE_KEY_REQ, JSON.stringify(reqs));
-    return reqs;
+    // Todos leen de la misma llave
+    return JSON.parse(localStorage.getItem("requerimientos")) || [];
 }
+
 
 function cargarEventosReq() {
     const buscador = document.getElementById("buscadorReq");
@@ -330,16 +284,31 @@ function cargarEventosReq() {
 function aplicarFiltrosReq() {
     const texto = document.getElementById("buscadorReq")?.value.toLowerCase() || "";
     const estadoFiltro = document.getElementById("filtroEstado")?.value || "";
+    const usuarioActual = localStorage.getItem("usuarioLogueado");
+
+    if (!usuarioActual) return; // Si no hay usuario, no mostramos nada
 
     const reqs = obtenerRequerimientos();
+
     const filtrados = reqs.filter(req => {
-        const coincideTexto = req.titulo.toLowerCase().includes(texto) || req.id.toLowerCase().includes(texto);
-        const coincideEstado = !estadoFiltro || req.estado === estadoFiltro;
-        return coincideTexto && coincideEstado;
+        const esMio = req.autor &&
+            req.autor.trim().toLowerCase() === usuarioActual.trim().toLowerCase();
+
+        const coincideTexto =
+            (req.titulo || "").toLowerCase().includes(texto) ||
+            (req.id || "").toLowerCase().includes(texto);
+
+        const coincideEstado =
+            !estadoFiltro ||
+            (req.estado || "").trim().toLowerCase() === estadoFiltro.trim().toLowerCase();
+
+        return esMio && coincideTexto && coincideEstado;
     });
 
+    filtrados.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+
     renderizarRequerimientos(filtrados);
-    actualizarContadorReq(filtrados.length);
+    actualizarContadorReq();
 }
 
 function renderizarRequerimientos(lista) {
@@ -347,6 +316,7 @@ function renderizarRequerimientos(lista) {
     if (!contenedor) return;
 
     contenedor.innerHTML = "";
+
     if (lista.length === 0) {
         contenedor.innerHTML = `<div class="empty-state">📭 No se encontraron requerimientos</div>`;
         return;
@@ -357,10 +327,10 @@ function renderizarRequerimientos(lista) {
         fila.className = "req-row";
         fila.innerHTML = `
             <div class="req-info">
-                <span class="req-title">${req.titulo}</span>
-                <span class="req-meta">${req.fecha}</span>
+                <span class="req-title"><strong>${req.titulo || "Sin título"}</strong></span>
+                <span class="req-meta">📅 ${req.fecha}</span>
             </div>
-            <div class="req-id">${req.id}</div>
+            <div class="req-id">🆔 ${req.id}</div>
             <div class="req-status-badge ${obtenerClaseEstado(req.estado)}">${req.estado}</div>
         `;
         fila.addEventListener("click", () => verDetalleReq(req));
@@ -368,10 +338,20 @@ function renderizarRequerimientos(lista) {
     });
 }
 
-function actualizarContadorReq(total) {
+function actualizarContadorReq() {
     const contador = document.getElementById("contadorReq");
-    if (contador) contador.textContent = total;
+    const usuario = localStorage.getItem("usuarioLogueado");
+    if (!contador || !usuario) return;
+
+    const todos = obtenerRequerimientos();
+    const misRequerimientosCount = todos.filter(r =>
+        r.autor?.trim().toLowerCase() === usuario.trim().toLowerCase()
+    ).length;
+
+
+    contador.textContent = misRequerimientosCount;
 }
+
 
 function obtenerClaseEstado(estado) {
     switch (estado) {
@@ -395,24 +375,38 @@ function cargarBandejaValidacion() {
     const contenedor = document.getElementById("listaRequerimientos");
     if (!contenedor) return;
 
-    const requerimientos = JSON.parse(localStorage.getItem("requerimientos")) || [];
+    const requerimientos = obtenerRequerimientos();
+
     if (requerimientos.length === 0) {
-        contenedor.innerHTML = "📭 No hay requerimientos pendientes.";
+        contenedor.innerHTML = `<div class="empty-state">📭 No hay requerimientos para validar.</div>`;
+        contenedor.style.display = "block";
         return;
     }
 
     contenedor.innerHTML = "";
+    contenedor.className = "validacion-grid";
+
     requerimientos.forEach(req => {
-        const div = document.createElement("div");
-        div.className = "req-row";
-        div.innerHTML = `
-            <div class="req-title">${req.titulo || "Requerimiento sin título"}</div>
-            <div class="req-meta">📅 ${req.fecha || "Sin fecha"}</div>
-            <div class="req-meta">🆔 ${req.id}</div>
-            <div class="req-status">Estado: ${req.estado || "Pendiente"}</div>
+        const card = document.createElement("div");
+        card.className = "val-card";
+
+        card.innerHTML = `
+            <div class="val-card-header">
+                <span class="val-card-id"># ${req.id}</span>
+                <div class="val-card-title">${req.titulo || "Sin título"}</div>
+            </div>
+            <div class="val-card-body">
+                <div class="val-info-item">📅 <span>${req.fecha}</span></div>
+                <div class="val-info-item">👤 <span>${req.autor || "Sistema"}</span></div>
+            </div>
+            <div class="val-card-footer">
+                <span class="val-badge ${obtenerClaseEstado(req.estado)}">${req.estado}</span>
+                <span style="font-size: 12px; color: #2282bf; font-weight: 500;">Revisar →</span>
+            </div>
         `;
-        div.addEventListener("click", () => abrirRequerimiento(req));
-        contenedor.appendChild(div);
+
+        card.addEventListener("click", () => abrirRequerimiento(req));
+        contenedor.appendChild(card);
     });
 }
 
@@ -421,6 +415,7 @@ function abrirRequerimiento(req) {
     const rol = localStorage.getItem("rol");
 
     localStorage.setItem("reqTemporal", req.contenido);
+    localStorage.setItem("reqValidandoId", req.id);
 
     if (rol === "admin") {
         window.location.href = "validacionRequerimiento.html";
@@ -431,23 +426,31 @@ function abrirRequerimiento(req) {
 
 function cargarRequerimientoValidacion() {
     const contenedor = document.getElementById("resultadoContenido");
-    const estado = document.getElementById("estadoValidacion");
-
     if (!contenedor) return;
 
     const reqHTML = localStorage.getItem("reqTemporal");
+    const reqId = localStorage.getItem("reqValidandoId");
 
     if (!reqHTML) {
         contenedor.innerHTML = "⚠️ No hay requerimiento para validar.";
-        if (estado) {
-            estado.className = "status-badge error";
-            estado.textContent = "Sin documento";
-        }
         return;
     }
 
     contenedor.innerHTML = reqHTML;
 
+    // Checks
+    const validaciones = JSON.parse(localStorage.getItem("validaciones")) || {};
+    const estadoGuardado = validaciones[reqId];
+
+    const checkPO = document.getElementById("checkPO");
+    const checkQA = document.getElementById("checkQA");
+
+    if (estadoGuardado && checkPO && checkQA) {
+        checkPO.checked = estadoGuardado.po;
+        checkQA.checked = estadoGuardado.qa;
+    }
+
+    controlarValidaciones();
 }
 
 
@@ -455,27 +458,76 @@ function controlarValidaciones() {
     const checkPO = document.getElementById("checkPO");
     const checkQA = document.getElementById("checkQA");
     const btnEnviar = document.getElementById("btnEnviarJira");
-    const estado = document.getElementById("estadoValidacion");
+    const estadoBadge = document.getElementById("estadoValidacion");
 
     if (!checkPO || !checkQA || !btnEnviar) return;
 
     const aprobadoPO = checkPO.checked;
     const aprobadoQA = checkQA.checked;
 
+    let nuevoEstado = "Pendiente";
+
     if (aprobadoPO && aprobadoQA) {
+        nuevoEstado = "Aprobado";
         btnEnviar.disabled = false;
-        estado.className = "status-badge success";
-        estado.textContent = "Aprobado para envío";
-    } else if (!aprobadoPO && !aprobadoQA) {
-        btnEnviar.disabled = true;
-        estado.className = "status-badge warning";
-        estado.textContent = "Pendiente de validación";
-    } else {
-        btnEnviar.disabled = true;
-        estado.className = "status-badge error";
-        estado.textContent = "Validación incompleta";
+
+        estadoBadge.className = "status-badge success";
+        estadoBadge.textContent = "Aprobado para envío";
     }
+    else if (aprobadoPO || aprobadoQA) {
+        nuevoEstado = "En validación";
+        btnEnviar.disabled = true;
+
+        estadoBadge.className = "status-badge warning";
+        estadoBadge.textContent = "En proceso de validación";
+    }
+    else {
+        nuevoEstado = "Pendiente";
+        btnEnviar.disabled = true;
+
+        estadoBadge.className = "status-badge error";
+        estadoBadge.textContent = "Pendiente de validación";
+    }
+
+    actualizarEstadoRequerimiento(nuevoEstado);
 }
+
+function actualizarEstadoRequerimiento(nuevoEstado) {
+    const reqId = localStorage.getItem("reqValidandoId");
+    if (!reqId) return;
+
+    const requerimientos = JSON.parse(localStorage.getItem(STORAGE_KEY_REQ)) || [];
+
+    const index = requerimientos.findIndex(r => r.id === reqId);
+    if (index === -1) return;
+
+    requerimientos[index].estado = nuevoEstado;
+
+    localStorage.setItem(STORAGE_KEY_REQ, JSON.stringify(requerimientos));
+}
+
+function guardarValidacionEstado() {
+    const reqId = localStorage.getItem("reqValidandoId");
+    if (!reqId) return;
+
+    const checkPO = document.getElementById("checkPO");
+    const checkQA = document.getElementById("checkQA");
+
+    if (!checkPO || !checkQA) return;
+
+    const estadoChecks = {
+        po: checkPO.checked,
+        qa: checkQA.checked
+    };
+
+    const validaciones = JSON.parse(localStorage.getItem("validaciones")) || {};
+    validaciones[reqId] = estadoChecks;
+
+    localStorage.setItem("validaciones", JSON.stringify(validaciones));
+
+    controlarValidaciones();
+}
+
 // Botones
 function verPDF() {
     window.location.href = "resultado.html";
@@ -541,29 +593,40 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
+    cargarEventosReq();
     // Cargar mis requerimientos
-    if (document.getElementById("listaRequerimientos")) {
-        cargarEventosReq();
-        const contenedor = document.getElementById("listaRequerimientos");
-
+    const contenedor = document.getElementById("listaRequerimientos");
+    if (contenedor) {
         if (usuario) {
-            const requerimientos = JSON.parse(localStorage.getItem("misRequerimientos")) || [];
-            const filtrados = requerimientos.filter(r => r.autor === usuario);
+            const requerimientos = obtenerRequerimientos();
+            // Filtramos solo los del usuario actual
+            const propios = requerimientos.filter(r =>
+                r.autor?.trim().toLowerCase() === usuario.trim().toLowerCase()
+            );
 
-            if (filtrados.length === 0) contenedor.innerHTML = "No hay requerimientos registrados todavía...";
-            else {
+            actualizarContadorReq();
+
+            if (propios.length === 0) {
+                contenedor.innerHTML = '<div class="empty-state">📭 No tienes requerimientos registrados.</div>';
+            } else {
                 contenedor.innerHTML = "";
-                filtrados.reverse().forEach(req => {
-                    const bloque = document.createElement("div");
-                    bloque.classList.add("req-card");
-                    bloque.innerHTML = `
-                        <div class="req-header">
-                            <strong>📌 ${req.id}</strong>
-                            <span>${req.fecha}</span>
+
+                propios.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+
+                propios.forEach(req => {
+                    const fila = document.createElement("div");
+
+                    fila.className = "req-item";
+                    fila.innerHTML = `
+                        <div class="req-info">
+                            <span class="req-title"><strong>${req.titulo || "Sin título"}</strong></span>
+                            <span class="req-meta">📅 ${req.fecha}</span>
                         </div>
-                        <div class="req-body">${req.contenido}</div>
+                        <div class="req-id">🆔 ${req.id}</div>
+                        <div class="req-status-badge ${obtenerClaseEstado(req.estado)}">${req.estado}</div>
                     `;
-                    contenedor.appendChild(bloque);
+                    fila.addEventListener("click", () => verDetalleReq(req));
+                    contenedor.appendChild(fila);
                 });
             }
         } else {
@@ -573,13 +636,19 @@ document.addEventListener("DOMContentLoaded", () => {
 
     scrollToBottom(true);
 
-    // Cargar validación si aplica
-    cargarBandejaValidacion();
+    if (paginaActual === "validacion.html") {
+        cargarBandejaValidacion();
+    }
+    if (paginaActual === "misRequerimientos.html") {
+        aplicarFiltrosReq();
+    }
+
     cargarRequerimientoValidacion();
     controlarValidaciones();
 
     document.addEventListener("change", (e) => {
         if (e.target.id === "checkPO" || e.target.id === "checkQA") {
+            guardarValidacionEstado();
             controlarValidaciones();
         }
     });
