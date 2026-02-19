@@ -9,7 +9,7 @@
     <title>Mis Requerimientos</title>
 </head>
 
-<body class="preview-page">
+<body class="misrequerimientos-page">
 
     <header class="main-header">
         <div class="header-container">
@@ -19,6 +19,8 @@
                 </a>
                 <div class="nav-links">
                     <a href="inicio.html">Inicio</a>
+                    <a href="misRequerimientos.html">Mis Requerimientos</a>
+                    <a href="validacion.html" id="navValidar">Validación</a>
                 </div>
                 <a href="#" class="logout" onclick="logout()">
                     <img src="img/log-out.png" alt="Salir">
@@ -31,23 +33,45 @@
 
         <section class="page-header">
             <h1>Mis Requerimientos</h1>
-            <p>Aquí se listan los requerimientos enviados desde el chatbot.</p>
+            <p>Consulta el estado y detalle de tus solicitudes registradas.</p>
         </section>
 
-        <section class="preview-card">    
-            <div class="preview-content" id="listaRequerimientos">
-                No hay requerimientos registrados todavía...
+        <section class="req-toolbar">
+            <div class="req-search">
+                <input type="text" id="buscadorReq" placeholder="🔎Buscar Requerimiento...">
             </div>
 
-            <div class="actions-buttons">
-                <button onclick="nuevoRequerimiento()">➕ Nuevo Requerimiento</button>
+            <div class="req-filters">
+                <select id="filtroEstado">
+                    <option value="">Todos los estados</option>
+                    <option value="Pendiente">Pendiente</option>
+                    <option value="En validación">En validación</option>
+                    <option value="Aprobado">Aprobado</option>
+                    <option value="Rechazado">Rechazado</option>
+                </select>
+            </div>
+
+            <div class="req-counter">
+                <span id="contadorReq">0</span> requerimientos
+            </div>
+
+            <div class="req-footer">
+                <button class="btn-primary" onclick="irNuevo()">
+                    <img src="img/agregar.png" alt="Nuevo">
+                </button>
+            </div>
+        </section>
+
+        <section class="preview-card">
+            <div class="req-list" id="listaRequerimientos">
+                No hay requerimientos registrados todavía...
             </div>
         </section>
 
     </main>
 
     <script src="js/script.js"></script>
-    <script src="js/misRequerimientos.js"></script>
+
 </body>
 
 </html>

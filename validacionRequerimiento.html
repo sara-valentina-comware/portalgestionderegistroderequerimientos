@@ -20,7 +20,7 @@
                 <div class="nav-links">
                     <a href="inicio.html">Inicio</a>
                     <a href="misRequerimientos.html">Mis Requerimientos</a>
-                    <a href="validacion.html" id="navValidar">Aprobación</a>
+                    <a href="validacion.html" id="navValidar">Validación</a>
                 </div>
 
                 <a href="#" class="logout" onclick="logout()">
@@ -33,22 +33,46 @@
     <main class="main-content">
 
         <section class="page-header">
-            <h1>Documento Técnico Generado</h1>
-            <p>Revisa el levantamiento generado antes de enviar la solicitud del Requerimiento.</p>
+            <h1>Validación del Requerimiento</h1>
+            <p>El Product Owner y QA deben validar el documento antes del envío.</p>
         </section>
 
         <section class="result-card">
 
-            <div class="status-badge success">Listo para aprobación</div>
+            <div class="status-badge warning" id="estadoValidacion">
+                Pendiente de validación
+            </div>
 
             <div class="document-preview" id="resultadoContenido">
                 Cargando documento técnico...
             </div>
 
+            <div class="validation-panel">
+                <h3>Controles de Validación</h3>
 
+                <label>
+                    <input type="checkbox" id="checkPO">
+                    Aprobación Product Owner
+                </label>
 
-            <div id="btnEnviarJira" class="actions-buttons" >
-                <button>Aprobar y Enviar a JIRA</button>
+                <label>
+                    <input type="checkbox" id="checkQA">
+                    Aprobación QA
+                </label>
+            </div>
+
+            <div class="actions-buttons">
+                <button class="btn-primary" onclick="verPDF()">
+                    👁 Ver PDF
+                </button>
+
+                <button onclick="editarPDF()">
+                    ✏ Editar Requerimiento
+                </button>
+
+                <button id="btnEnviarJira" disabled>
+                    🚀 Aprobar y Enviar a JIRA
+                </button>
             </div>
 
         </section>

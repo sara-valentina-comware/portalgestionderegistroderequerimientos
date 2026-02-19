@@ -20,7 +20,7 @@
                 <div class="nav-links">
                     <a href="inicio.html">Inicio</a>
                     <a href="misRequerimientos.html">Mis Requerimientos</a>
-                    <a href="validacion.html" id="navValidar">Aprobación</a>
+                    <a href="validacion.html" id="navValidar">Validación</a>
                 </div>
 
                 <a href="#" class="logout" onclick="logout()">
@@ -32,28 +32,21 @@
 
     <main class="main-content">
 
-        <section class="page-header">
-            <h1>Documento Técnico Generado</h1>
-            <p>Revisa el levantamiento generado antes de enviar la solicitud del Requerimiento.</p>
-        </section>
+    <section class="page-header">
+        <h1>Bandeja de Validación</h1>
+        <p>Seleccione un requerimiento para revisar y validar.</p>
+    </section>
 
-        <section class="result-card">
+    <section class="result-card">
 
-            <div class="status-badge success">Listo para aprobación</div>
+        <div id="listaRequerimientos" class="req-grid">
+            Cargando requerimientos...
+        </div>
 
-            <div class="document-preview" id="resultadoContenido">
-                Cargando documento técnico...
-            </div>
+    </section>
 
+</main>
 
-
-            <div id="btnEnviarJira" class="actions-buttons" >
-                <button>Aprobar y Enviar a JIRA</button>
-            </div>
-
-        </section>
-
-    </main>
 
     <script src="js/script.js"></script>
 </body>

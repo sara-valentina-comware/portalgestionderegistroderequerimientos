@@ -57,7 +57,15 @@ app.post("/login", async (req, res) => {
 
         console.log("Password válida:", passwordValida);
 
-        res.json({ success: passwordValida });
+        if (!passwordValida) {
+            return res.json({ success: false });
+        }
+
+        res.json({
+            success: true,
+            usuario: user.nombre_usuario,
+            rol: user.rol
+        });
 
     } catch (error) {
 
@@ -67,6 +75,7 @@ app.post("/login", async (req, res) => {
     }
 });
 
+
 app.listen(3000, () => {
-    console.log("🚀 Servidor corriendo en http://localhost:3000");
+    console.log("Servidor corriendo en http://localhost:3000");
 });
