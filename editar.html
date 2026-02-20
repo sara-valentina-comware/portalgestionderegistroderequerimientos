@@ -31,37 +31,40 @@
     </header>
 
     <main class="main-content">
-
-        <section class="page-header">
-            <h1>Documento Técnico Generado</h1>
-            <p>Revisa el levantamiento generado antes de enviar la solicitud del Requerimiento.</p>
-        </section>
-
         <section class="result-card">
+            <h3>Modificar Contenido Técnico</h3>
 
-            <div class="status-badge success">Listo para aprobación</div>
-
-            <div class="document-preview" id="resultadoContenido">
-                Cargando documento técnico...
+            <div id="editorContenido" contenteditable="true" class="document-preview editor-estilo-fijo">
+                Cargando contenido...
             </div>
 
             <div class="actions-buttons">
-                <button class="btn-icon-volver" onclick="irAtrasSegunRol()" title="Volver">
-                    <img src="img/anterior.png" class="img-volver" alt="Volver">
+                <button class="btn-icon-volver" onclick="irAtrasSegunRol()" title="Volver a la lista">
+                    <img src="img/anterior.png" alt="Regresar" class="img-volver">
                 </button>
 
                 <div class="buttons-right">
-                    <button class="btn-pdf" onclick="descargarPDF()">📥 Descargar</button>
-                    <button id="btnEnviarJira" class="btn-primary">🚀 Aprobar y Enviar a JIRA</button>
+                    <button class="btn-primary" onclick="guardarEdicion()">💾 Guardar Cambios</button>
+                    <button class="btn-danger" onclick="window.history.back()">❌ Cancelar</button>
                 </div>
             </div>
-
         </section>
-
     </main>
 
     <script src="js/script.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            const contenidoHTML = localStorage.getItem("reqTemporal");
+            if (contenidoHTML) {
+                const tempDiv = document.createElement("div");
+                tempDiv.innerHTML = contenidoHTML;
+
+                let textoPlano = tempDiv.innerText || tempDiv.textContent;
+
+                document.getElementById("editorContenido").value = textoPlano.trim();
+            }
+        });
+    </script>
 </body>
 
 </html>

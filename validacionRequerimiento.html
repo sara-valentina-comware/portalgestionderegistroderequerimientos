@@ -6,7 +6,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="css/styles.css">
     <link rel="icon" href="img/icono.png">
-    <title>Registro de Requerimientos</title>
+    <title>Validación de Requerimientos - Admin</title>
+    <style>
+
+    </style>
 </head>
 
 <body>
@@ -34,7 +37,7 @@
 
         <section class="page-header">
             <h1>Validación del Requerimiento</h1>
-            <p>El Product Owner y QA deben validar el documento antes del envío.</p>
+            <p>Revisión técnica y funcional por parte de Product Owner y QA.</p>
         </section>
 
         <section class="result-card">
@@ -48,33 +51,55 @@
             </div>
 
             <div class="validation-panel">
-                <h3>Controles de Validación</h3>
+                <div class="panel-header">
+                    <h3>Controles de Validación</h3>
+                </div>
 
-                <label>
-                    <input type="checkbox" id="checkPO">
-                    Aprobación Product Owner
-                </label>
+                <div class="check-group">
+                    <label class="check-card">
+                        <input type="checkbox" id="checkPO">
+                        <div class="card-content">
+                            <span class="check-icon">👤</span>
+                            <span class="check-text">Product Owner</span>
+                        </div>
+                    </label>
 
-                <label>
-                    <input type="checkbox" id="checkQA">
-                    Aprobación QA
-                </label>
+                    <label class="check-card">
+                        <input type="checkbox" id="checkQA">
+                        <div class="card-content">
+                            <span class="check-icon">🛡️</span>
+                            <span class="check-text">QA Técnica</span>
+                        </div>
+                    </label>
+                </div>
+
+                <div class="reject-reason-container">
+                    <label for="motivoRechazo" class="textarea-label">
+                        Motivo de rechazo u observaciones técnicas:
+                    </label>
+                    <textarea id="motivoRechazo"
+                        placeholder="Si vas a rechazar, explica detalladamente los cambios necesarios..."></textarea>
+                </div>
             </div>
 
             <div class="actions-buttons">
-                <button class="btn-primary" onclick="verPDF()">
-                    👁 Ver PDF
+                <button class="btn-icon-volver" onclick="irValidacion()" title="Volver a la lista">
+                    <img src="img/anterior.png" alt="Regresar" class="img-volver">
                 </button>
 
-                <button onclick="editarPDF()">
-                    ✏ Editar Requerimiento
-                </button>
+                <div class="buttons-right">
+                    <button class="btn-primary" onclick="verPDF()">👁 Ver PDF</button>
+                    <button class="btn-secondary" onclick="editarPDF()">✏ Editar</button>
 
-                <button id="btnEnviarJira" disabled>
-                    🚀 Aprobar y Enviar a JIRA
-                </button>
+                    <button id="btnRechazar" class="btn-danger-modern" onclick="rechazarRequerimiento()">
+                        ❌ Rechazar
+                    </button>
+
+                    <button id="btnEnviarJira" class="btn-success-modern" disabled>
+                        🚀 Aprobar y Enviar a JIRA
+                    </button>
+                </div>
             </div>
-
         </section>
 
     </main>

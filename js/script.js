@@ -91,18 +91,32 @@ function logout() {
    NAVEGACIÓN
 ========================= */
 function irNuevo() {
-    localStorage.removeItem("reqTemporal");
     window.location.href = "nuevo.html";
 }
 
 function irMisRequerimientos() {
-    localStorage.removeItem("reqTemporal");
     window.location.href = "misRequerimientos.html";
 }
 
 function irValidacion() {
-    localStorage.removeItem("reqTemporal");
     window.location.href = "validacion.html";
+}
+
+function irAtrasSegunRol() {
+    const rol = localStorage.getItem("rol");
+    const origen = localStorage.getItem("origenNavegacion");
+
+    if (origen === "misRequerimientos") {
+        localStorage.removeItem("origenNavegacion");
+        window.location.href = "misRequerimientos.html";
+        return;
+    }
+
+    if (rol === "admin") {
+        window.location.href = "validacionRequerimiento.html";
+    } else {
+        window.location.href = "misRequerimientos.html";
+    }
 }
 
 /* =========================
@@ -152,7 +166,15 @@ async function sendMessage() {
     // Mostrar mensaje usuario
     const userMsg = document.createElement("div");
     userMsg.className = "message user";
-    userMsg.innerHTML = `<div class="message-content">${userText}${file ? `<br><small>📎 ${file.name}</small>` : ""}</div><div class="message-icon"><img src="img/avatar.png"></div>`;
+    userMsg.innerHTML = `
+        <div class="message-content">
+            ${userText}
+            ${file ? `<br><small>📎 ${file.name}</small>` : ""}
+        </div>
+        <div class="message-icon">
+            <img src="img/avatar.png">
+        </div>
+    `;
     chat.appendChild(userMsg);
     scrollToBottom(true);
 
@@ -161,7 +183,15 @@ async function sendMessage() {
 
     const typingMsg = document.createElement("div");
     typingMsg.className = "message bot typing";
-    typingMsg.innerHTML = `<div class="message-icon"><img src="img/bot.png"></div><div class="message-content">NOVA está escribiendo...</div>`;
+    typingMsg.innerHTML = `
+        <div class="message-icon">
+            <img src="img/bot.png">
+        </div>
+        <div class="message-content">
+            NOVA está escribiendo...
+        </div>
+    `;
+
     chat.appendChild(typingMsg);
     scrollToBottom(true);
 
@@ -198,7 +228,14 @@ async function sendMessage() {
         typingMsg.remove();
         const botMsg = document.createElement("div");
         botMsg.className = "message bot";
-        botMsg.innerHTML = `<div class="message-icon"><img src="img/bot.png"></div><div class="message-content">${formatMessage(respuestaFinal)}</div>`;
+        botMsg.innerHTML = `
+            <div class="message-icon">
+                <img src="img/bot.png">
+            </div>
+            <div class="message-content">
+                ${formatMessage(respuestaFinal)}
+            </div>
+        `;
         chat.appendChild(botMsg);
         scrollToBottom(true);
 
@@ -211,15 +248,24 @@ async function sendMessage() {
 function extraerTitulo(texto) {
     if (!texto) return null;
 
-    const patrones = [
-        /Nombre del servicio:\s*(.+)/i,
-        /Nombre del Servicio:\s*(.+)/i,
-        /Servicio:\s*(.+)/i
-    ];
+    const lineas = texto.replace(/<br\s*\/?>/gi, "\n").split("\n");
 
-    for (let patron of patrones) {
-        const match = texto.match(patron);
-        if (match) return match[1].trim();
+    for (let i = 0; i < lineas.length; i++) {
+        const l = lineas[i].trim();
+
+        if (/nombre del servicio|nombre del requerimiento|título|titulo/i.test(l)) {
+            const partes = l.split(":");
+
+            // Caso: "Título: Algo"
+            if (partes[1]?.trim()) {
+                return partes[1].trim();
+            }
+
+            // Caso en siguiente línea
+            if (lineas[i + 1]?.trim()) {
+                return lineas[i + 1].trim();
+            }
+        }
     }
 
     return null;
@@ -239,6 +285,14 @@ function convertirPlantillaAHTML(texto) {
         if (!l || /plantilla final generada/i.test(l)) {
             return;
         }
+        if (!l || /Un requerimiento de servicio según ITIL es una solicitud formal del usuario para acceder a un servicio, modificar una funcionalidad existente o recibir información.Se gestiona diferente a los incidentes./i.test(l)) {
+            return;
+        }
+        if (!l || /Forma/i.test(l)) {
+            return;
+        }
+
+
         if (l.toLowerCase().includes("plantilla para escalamiento")) {
             html += `<h1 class="doc-main-title">${l}</h1>`;
         }
@@ -359,13 +413,130 @@ function obtenerClaseEstado(estado) {
         case "En validación": return "validacion";
         case "Aprobado": return "aprobado";
         case "Rechazado": return "rechazado";
+        case "Editado": return "editado";
         default: return "";
     }
 }
 
 function verDetalleReq(req) {
     localStorage.setItem("reqDetalle", JSON.stringify(req));
+    localStorage.setItem("origenNavegacion", "misRequerimientos");
     window.location.href = "resultado.html";
+}
+
+/* =========================
+   GENERACIÓN DE PDF
+========================= */
+async function descargarPDF() {
+
+    const element = document.getElementById("resultadoContenido");
+
+    if (!element || element.innerText.includes("Cargando")) {
+        alert("Espera a que el documento termine de cargar.");
+        return;
+    }
+
+    const reqId = localStorage.getItem("reqValidandoId") || "Requerimiento";
+
+    try {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF({
+            orientation: "portrait",
+            unit: "mm",
+            format: "a4"
+        });
+
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const pageHeight = doc.internal.pageSize.getHeight();
+
+        const margin = 15;
+        const usableWidth = pageWidth - margin * 2;
+        const startY = 20;
+        const lineHeight = 4;
+
+        let y = startY;
+        let pageCount = 1;
+
+        // Encabezado
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(14);
+        doc.text("Documento de Requerimiento", pageWidth / 2, 10, { align: "center" });
+
+        doc.setFontSize(8);
+        doc.setFont("helvetica", "normal");
+        doc.text(`ID: ${reqId}`, pageWidth - margin, 10, { align: "right" });
+
+        doc.line(margin, 12, pageWidth - margin, 12);
+
+        // Procesamiento del Texto
+        const texto = element.innerText.trim();
+        const lineasOriginales = texto.split("\n");
+
+        doc.setFontSize(9);
+
+        lineasOriginales.forEach(linea => {
+
+            const l = linea.trim();
+            if (!l) return;
+
+            // Títulos / subtítulos
+            const esTitulo =
+                l.toUpperCase() === l && l.length < 60;
+
+            const esSubtitulo =
+                l.endsWith(":");
+
+            let fontSize = 9;
+            let fontStyle = "normal";
+
+            if (esTitulo) {
+                fontSize = 11;
+                fontStyle = "bold";
+            }
+            else if (esSubtitulo) {
+                fontSize = 8;
+                fontStyle = "bold";
+            }
+
+            doc.setFont("helvetica", fontStyle);
+            doc.setFontSize(fontSize);
+
+            const lineas = doc.splitTextToSize(l, usableWidth);
+
+            lineas.forEach(subLinea => {
+
+                if (y > pageHeight - 15) {
+
+                    if (pageCount === 2) return;
+
+                    doc.addPage();
+                    pageCount++;
+                    y = startY;
+                }
+
+                doc.text(subLinea, margin, y);
+                y += lineHeight;
+            });
+
+            y += 1;
+        });
+
+        // Pie de Página
+        doc.setFontSize(8);
+        doc.setFont("helvetica", "normal");
+        doc.text(
+            "Generado por Portal de Requerimientos",
+            pageWidth / 2,
+            pageHeight - 5,
+            { align: "center" }
+        );
+
+        doc.save(`Requerimiento_${reqId}.pdf`);
+
+    } catch (error) {
+        console.error("Error PDF:", error);
+        alert("Error al generar PDF.");
+    }
 }
 
 /* =========================
@@ -376,6 +547,8 @@ function cargarBandejaValidacion() {
     if (!contenedor) return;
 
     const requerimientos = obtenerRequerimientos();
+
+    requerimientos.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
 
     if (requerimientos.length === 0) {
         contenedor.innerHTML = `<div class="empty-state">📭 No hay requerimientos para validar.</div>`;
@@ -411,11 +584,11 @@ function cargarBandejaValidacion() {
 }
 
 function abrirRequerimiento(req) {
-
     const rol = localStorage.getItem("rol");
 
     localStorage.setItem("reqTemporal", req.contenido);
     localStorage.setItem("reqValidandoId", req.id);
+    localStorage.setItem("origenNavegacion", "validacion");
 
     if (rol === "admin") {
         window.location.href = "validacionRequerimiento.html";
@@ -428,29 +601,80 @@ function cargarRequerimientoValidacion() {
     const contenedor = document.getElementById("resultadoContenido");
     if (!contenedor) return;
 
-    const reqHTML = localStorage.getItem("reqTemporal");
     const reqId = localStorage.getItem("reqValidandoId");
+    const db = obtenerRequerimientos();
+    const reqActual = db.find(r => r.id === reqId);
+
+    const reqHTML = localStorage.getItem("reqTemporal") || reqActual?.contenido;
 
     if (!reqHTML) {
         contenedor.innerHTML = "⚠️ No hay requerimiento para validar.";
         return;
     }
 
-    contenedor.innerHTML = reqHTML;
+    // 3. Si está rechazado, preparamos un banner de alerta para el usuario/admin
+    let alertaMotivo = "";
+    if (reqActual?.estado === "Rechazado" && reqActual?.comentario) {
+        alertaMotivo = `
+            <div class="reject-alert" style="background: #fdf2f2; border-left: 5px solid #e74c3c; padding: 15px; margin-bottom: 20px; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+                <h4 style="color: #e74c3c; margin: 0; font-size: 16px;">❌ Requerimiento Rechazado</h4>
+                <p style="margin: 8px 0 0; color: #555; font-size: 14px; line-height: 1.4;">
+                    <strong>Motivo del rechazo:</strong> ${reqActual.comentario}
+                </p>
+            </div>`;
+    }
 
-    // Checks
+    contenedor.innerHTML = alertaMotivo + reqHTML;
+
+    const txtMotivo = document.getElementById("motivoRechazo");
+    if (txtMotivo) {
+        txtMotivo.value = reqActual?.comentario || "";
+    }
+
     const validaciones = JSON.parse(localStorage.getItem("validaciones")) || {};
-    const estadoGuardado = validaciones[reqId];
+    const estadoChecksGuardado = validaciones[reqId];
 
     const checkPO = document.getElementById("checkPO");
     const checkQA = document.getElementById("checkQA");
 
-    if (estadoGuardado && checkPO && checkQA) {
-        checkPO.checked = estadoGuardado.po;
-        checkQA.checked = estadoGuardado.qa;
+    if (estadoChecksGuardado && checkPO && checkQA) {
+        checkPO.checked = estadoChecksGuardado.po || false;
+        checkQA.checked = estadoChecksGuardado.qa || false;
     }
 
     controlarValidaciones();
+}
+
+function rechazarRequerimiento() {
+    const reqId = localStorage.getItem("reqValidandoId");
+    const txtMotivo = document.getElementById("motivoRechazo");
+    const motivo = txtMotivo ? txtMotivo.value.trim() : "";
+
+    if (!motivo) {
+        alert("⚠️ Por favor, ingresa un motivo para rechazar el requerimiento.");
+        txtMotivo?.focus();
+        return;
+    }
+
+    if (confirm(`¿Estás seguro de rechazar el requerimiento ${reqId}?`)) {
+        const requerimientos = obtenerRequerimientos();
+        const index = requerimientos.findIndex(r => r.id === reqId);
+
+        if (index !== -1) {
+            requerimientos[index].estado = "Rechazado";
+            requerimientos[index].comentario = motivo;
+
+            // También reseteamos los checks de aprobación al rechazar
+            const validaciones = JSON.parse(localStorage.getItem("validaciones")) || {};
+            validaciones[reqId] = { po: false, qa: false };
+
+            localStorage.setItem(STORAGE_KEY_REQ, JSON.stringify(requerimientos));
+            localStorage.setItem("validaciones", JSON.stringify(validaciones));
+
+            alert(`❌ Requerimiento ${reqId} se rechazo correctamente!`);
+            window.location.href = "validacion.html";
+        }
+    }
 }
 
 
@@ -462,34 +686,24 @@ function controlarValidaciones() {
 
     if (!checkPO || !checkQA || !btnEnviar) return;
 
-    const aprobadoPO = checkPO.checked;
-    const aprobadoQA = checkQA.checked;
+    btnEnviar.disabled = false;
 
-    let nuevoEstado = "Pendiente";
-
-    if (aprobadoPO && aprobadoQA) {
-        nuevoEstado = "Aprobado";
-        btnEnviar.disabled = false;
-
-        estadoBadge.className = "status-badge success";
-        estadoBadge.textContent = "Aprobado para envío";
+    if (checkPO.checked && checkQA.checked) {
+        if (estadoBadge) {
+            estadoBadge.className = "status-badge success";
+            estadoBadge.textContent = "Listo para enviar";
+        }
+    } else if (checkPO.checked || checkQA.checked) {
+        if (estadoBadge) {
+            estadoBadge.className = "status-badge warning";
+            estadoBadge.textContent = "En validación";
+        }
+    } else {
+        if (estadoBadge) {
+            estadoBadge.className = "status-badge warning";
+            estadoBadge.textContent = "Pendiente de validaciones";
+        }
     }
-    else if (aprobadoPO || aprobadoQA) {
-        nuevoEstado = "En validación";
-        btnEnviar.disabled = true;
-
-        estadoBadge.className = "status-badge warning";
-        estadoBadge.textContent = "En proceso de validación";
-    }
-    else {
-        nuevoEstado = "Pendiente";
-        btnEnviar.disabled = true;
-
-        estadoBadge.className = "status-badge error";
-        estadoBadge.textContent = "Pendiente de validación";
-    }
-
-    actualizarEstadoRequerimiento(nuevoEstado);
 }
 
 function actualizarEstadoRequerimiento(nuevoEstado) {
@@ -519,11 +733,29 @@ function guardarValidacionEstado() {
         po: checkPO.checked,
         qa: checkQA.checked
     };
-
     const validaciones = JSON.parse(localStorage.getItem("validaciones")) || {};
     validaciones[reqId] = estadoChecks;
-
     localStorage.setItem("validaciones", JSON.stringify(validaciones));
+
+    let requerimientos = obtenerRequerimientos();
+    const index = requerimientos.findIndex(r => r.id === reqId);
+
+    if (index !== -1) {
+        const estadoActual = requerimientos[index].estado;
+
+        // Lógica de cambio de estado:
+        if (checkPO.checked || checkQA.checked) {
+            // Si hay algún check, pasa a "En validación" (a menos que ya esté Aprobado/enviado)
+            if (estadoActual !== "Aprobado") {
+                requerimientos[index].estado = "En validación";
+            }
+        } else {
+            // Si desmarcan ambos, vuelve a Pendiente
+            requerimientos[index].estado = "Pendiente";
+        }
+
+        localStorage.setItem(STORAGE_KEY_REQ, JSON.stringify(requerimientos));
+    }
 
     controlarValidaciones();
 }
@@ -534,50 +766,148 @@ function verPDF() {
 }
 
 function editarPDF() {
-    window.location.href = "nuevo.html";
+    window.location.href = "editar.html";
+}
+
+function guardarEdicion() {
+    const editor = document.getElementById("editorContenido");
+    const nuevoHTML = editor.innerHTML;
+    const reqId = localStorage.getItem("reqValidandoId");
+
+    let requerimientos = JSON.parse(localStorage.getItem("requerimientos")) || [];
+    const index = requerimientos.findIndex(r => r.id === reqId);
+
+    if (index !== -1) {
+        requerimientos[index].contenido = nuevoHTML;
+        requerimientos[index].estado = "Editado";
+
+        localStorage.setItem("requerimientos", JSON.stringify(requerimientos));
+        localStorage.setItem("reqTemporal", nuevoHTML);
+
+        alert(`✅ Requerimiento ${reqId} guardado exitosamente`);
+        window.location.href = "validacion.html";
+    }
 }
 
 /* =========================
-   INIT GENERAL
+   INIT GENERAL & SEGURIDAD
 ========================= */
 document.addEventListener("DOMContentLoaded", () => {
 
     const usuario = localStorage.getItem("usuarioLogueado");
     const rol = localStorage.getItem("rol");
     const paginaActual = window.location.pathname.split("/").pop();
-    const enLogin = paginaActual === "index.html";
+    const enLogin = paginaActual === "index.html" || paginaActual === "";
 
-    if (!usuario && !enLogin) window.location.href = "index.html";
+    // PROTECCIÓN DE ACCESO: USUARIO NO LOGUEADO
+    if (!usuario && !enLogin) {
+        window.location.href = "index.html";
+        return;
+    }
 
+    // PROTECCIÓN DE ACCESO: SEGÚN ROL (USER NO ENTRA A ADMIN)
+    const paginasSoloAdmin = [
+        "validacion.html",
+        "validacionRequerimiento.html",
+        "editar.html"
+    ];
+
+    if (rol === "user" && paginasSoloAdmin.includes(paginaActual)) {
+        console.warn(`Intento de acceso no autorizado por: ${usuario}`);
+        alert("🚫 No tienes permisos para acceder a esta sección de administración.");
+        window.location.href = "inicio.html";
+        return;
+    }
+
+    // CONTROL DE INACTIVIDAD
     if (usuario) {
         localStorage.setItem("ultimaActividad", Date.now());
         setInterval(verificarInactividad, 30000);
     }
 
     if (rol === "user") {
-        const cardValidar = document.getElementById("cardValidar");
-        if (cardValidar) cardValidar.style.display = "none";
+        const elementosPrivados = [
+            "cardValidar",
+            "navValidar",
+            "btnEnviarJira",
+            "btnEditar",
+            "seccionChecks"
+        ];
 
-        const navValidar = document.getElementById("navValidar");
-        if (navValidar) navValidar.style.display = "none";
+        elementosPrivados.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.style.display = "none";
+        });
 
-        const btnEnviarJira = document.getElementById("btnEnviarJira");
-        if (btnEnviarJira) btnEnviarJira.style.display = "none";
+        const editor = document.getElementById("editorContenido");
+        if (editor) {
+            editor.contentEditable = "false";
+            editor.style.userSelect = "text";
+        }
     }
 
-    // Enter login
+    if (rol === "admin" && paginaActual === "resultado.html") {
+        const botonesTecnicos = [
+            "btnEnviarJira",
+            "btnRechazar",
+            "seccionChecks"
+        ];
+
+        botonesTecnicos.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.style.display = "none";
+        });
+
+        const panelValidacion = document.querySelector(".validation-panel");
+        if (panelValidacion) panelValidacion.style.display = "none";
+    }
+
+    // CARGA DE DATOS SEGÚN PÁGINA
     const passwordInput = document.getElementById("password");
     if (passwordInput) passwordInput.addEventListener("keydown", e => {
         if (e.key === "Enter") { e.preventDefault(); login(); }
     });
 
-    // Enter chat
     const userInput = document.getElementById("userInput");
     if (userInput) userInput.addEventListener("keydown", e => {
         if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
     });
 
-    // Previsualizar adjunto
+    // Carga de lista de requerimientos (Solo en misRequerimientos.html)
+    const contenedorLista = document.getElementById("listaRequerimientos");
+    if (contenedorLista && paginaActual === "misRequerimientos.html") {
+        aplicarFiltrosReq();
+        cargarEventosReq();
+    }
+
+    // Carga de Bandeja Técnica (Solo en validacion.html)
+    if (paginaActual === "validacion.html") {
+        cargarBandejaValidacion();
+    }
+
+    // Carga de Vista de Validación o Detalle (resultado.html / validacionRequerimiento.html)
+    if (paginaActual === "resultado.html" || paginaActual === "validacionRequerimiento.html") {
+        cargarRequerimientoValidacion();
+        controlarValidaciones();
+
+        document.addEventListener("change", (e) => {
+            if (e.target.id === "checkPO" || e.target.id === "checkQA") {
+                guardarValidacionEstado();
+                controlarValidaciones();
+            }
+        });
+    }
+
+    // Carga de Editor (Solo en editar.html)
+    if (paginaActual === "editar.html") {
+        const contenidoHTML = localStorage.getItem("reqTemporal");
+        const editor = document.getElementById("editorContenido");
+        if (contenidoHTML && editor) {
+            editor.innerHTML = contenidoHTML;
+        }
+    }
+
+    // Previsualización de archivos
     const fileInput = document.getElementById("fileInput");
     const filePreview = document.getElementById("filePreview");
     if (fileInput && filePreview) {
@@ -593,81 +923,45 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
-    cargarEventosReq();
-    // Cargar mis requerimientos
-    const contenedor = document.getElementById("listaRequerimientos");
-    if (contenedor) {
-        if (usuario) {
-            const requerimientos = obtenerRequerimientos();
-            // Filtramos solo los del usuario actual
-            const propios = requerimientos.filter(r =>
-                r.autor?.trim().toLowerCase() === usuario.trim().toLowerCase()
-            );
-
-            actualizarContadorReq();
-
-            if (propios.length === 0) {
-                contenedor.innerHTML = '<div class="empty-state">📭 No tienes requerimientos registrados.</div>';
-            } else {
-                contenedor.innerHTML = "";
-
-                propios.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-
-                propios.forEach(req => {
-                    const fila = document.createElement("div");
-
-                    fila.className = "req-item";
-                    fila.innerHTML = `
-                        <div class="req-info">
-                            <span class="req-title"><strong>${req.titulo || "Sin título"}</strong></span>
-                            <span class="req-meta">📅 ${req.fecha}</span>
-                        </div>
-                        <div class="req-id">🆔 ${req.id}</div>
-                        <div class="req-status-badge ${obtenerClaseEstado(req.estado)}">${req.estado}</div>
-                    `;
-                    fila.addEventListener("click", () => verDetalleReq(req));
-                    contenedor.appendChild(fila);
-                });
-            }
-        } else {
-            contenedor.innerHTML = "Debes iniciar sesión.";
-        }
-    }
-
-    scrollToBottom(true);
-
-    if (paginaActual === "validacion.html") {
-        cargarBandejaValidacion();
-    }
-    if (paginaActual === "misRequerimientos.html") {
-        aplicarFiltrosReq();
-    }
-
-    cargarRequerimientoValidacion();
-    controlarValidaciones();
-
-    document.addEventListener("change", (e) => {
-        if (e.target.id === "checkPO" || e.target.id === "checkQA") {
-            guardarValidacionEstado();
-            controlarValidaciones();
-        }
-    });
-
-
-    // Botón enviar a JIRA
     const btnEnviar = document.getElementById("btnEnviarJira");
-    if (btnEnviar) {
-        btnEnviar.addEventListener("click", () => {
-            const aprobadoPO = document.getElementById("checkPO")?.checked;
-            const aprobadoQA = document.getElementById("checkQA")?.checked;
 
-            if (!aprobadoPO || !aprobadoQA) {
-                alert("El requerimiento debe ser aprobado por PO y QA.");
+    if (btnEnviar) {
+        btnEnviar.disabled = false;
+
+        btnEnviar.addEventListener("click", () => {
+            const reqId = localStorage.getItem("reqValidandoId");
+            const checkPO = document.getElementById("checkPO");
+            const checkQA = document.getElementById("checkQA");
+
+            if (!checkPO || !checkQA) return;
+
+            if (!checkPO.checked && !checkQA.checked) {
+                alert("⚠️ Faltan las validaciones de PO y QA.");
+                return;
+            }
+            if (!checkPO.checked) {
+                alert("⚠️ Falta la validación del Product Owner (PO).");
+                return;
+            }
+            if (!checkQA.checked) {
+                alert("⚠️ Falta la validación de QA.");
                 return;
             }
 
-            alert("Requerimiento enviado al flujo de JIRA");
-            console.log("Enviar a JIRA...");
+            const confirmar = confirm(`🚀 ¿Enviar requerimiento ${reqId} a JIRA?`);
+            if (!confirmar) return;
+
+            const requerimientos = obtenerRequerimientos();
+            const index = requerimientos.findIndex(r => r.id === reqId);
+
+            if (index !== -1) {
+                requerimientos[index].estado = "Aprobado";
+                localStorage.setItem("requerimientos", JSON.stringify(requerimientos));
+                alert(`✅ Requerimiento ${reqId} enviado exitosamente.`);
+                window.location.href = "validacion.html";
+            }
         });
     }
+
+    scrollToBottom(true);
 });
