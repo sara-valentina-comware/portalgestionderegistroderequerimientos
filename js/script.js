@@ -2,6 +2,7 @@ const API_URL = "http://localhost:3000";
 const NOVA_URL = "https://n8n.comware.com.co/webhook/chat-portalgestionderegistroderequerimientos";
 const STORAGE_KEY_REQ = "requerimientos";
 const TIEMPO_EXPIRACION = 10 * 60 * 1000;
+let archivoTemporalGlobal = null;
 
 function generarThreadId() {
     return "thread_" + Date.now();
@@ -161,6 +162,22 @@ async function sendMessage() {
     if (!input || !chat) return;
     const userText = input.value.trim();
     const file = fileInput?.files[0];
+    if (file) archivoTemporalGlobal = file;
+
+    function convertirABase64(file) {
+        return new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onload = function (e) {
+                resolve({
+                    nombre: file.name,
+                    tipo: file.type,
+                    data: e.target.result
+                });
+            };
+            reader.readAsDataURL(file);
+        });
+    }
+
     if (!userText && !file) return;
 
     actualizarActividad();
@@ -168,32 +185,17 @@ async function sendMessage() {
     // Mostrar mensaje usuario
     const userMsg = document.createElement("div");
     userMsg.className = "message user";
-    userMsg.innerHTML = `
-        <div class="message-content">
-            ${userText}
-            ${file ? `<br><small>📎 ${file.name}</small>` : ""}
-        </div>
-        <div class="message-icon">
-            <img src="img/avatar.png">
-        </div>
-    `;
+    userMsg.innerHTML = `<div class="message-content">${userText}${file ? `<br><small>📎 ${file.name}</small>` : ""}</div><div class="message-icon"><img src="img/avatar.png"></div>`;
     chat.appendChild(userMsg);
     scrollToBottom(true);
 
     input.value = "";
     removeFile();
 
+    // Mensaje "NOVA escribiendo"
     const typingMsg = document.createElement("div");
     typingMsg.className = "message bot typing";
-    typingMsg.innerHTML = `
-        <div class="message-icon">
-            <img src="img/bot.png">
-        </div>
-        <div class="message-content">
-            NOVA está escribiendo...
-        </div>
-    `;
-
+    typingMsg.innerHTML = `<div class="message-icon"><img src="img/bot.png"></div><div class="message-content">NOVA está escribiendo...</div>`;
     chat.appendChild(typingMsg);
     scrollToBottom(true);
 
@@ -203,41 +205,73 @@ async function sendMessage() {
         formData.append("threadId", localStorage.getItem("threadId"));
         if (file) formData.append("file", file);
 
-        const response = await fetch(NOVA_URL, { method: "POST", body: formData });
-        const data = await response.json();
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 60000);
+
+        const response = await fetch(NOVA_URL, {
+            method: "POST",
+            body: formData,
+            signal: controller.signal
+        });
+
+        clearTimeout(timeout);
+
+        if (!response.ok) throw new Error("Respuesta inválida del servidor");
+
+        const text = await response.text();
+        let data;
+        try {
+            data = JSON.parse(text);
+        } catch (error) {
+            typingMsg.remove();
+            const errorMsg = document.createElement("div");
+            errorMsg.className = "message bot";
+            errorMsg.innerHTML = `
+                <div class="message-icon"><img src="img/bot.png"></div>
+                <div class="message-content">
+                    ⚠️ NOVA no respondió. Verifica el webhook o intenta nuevamente.
+                </div>
+            `;
+            chat.appendChild(errorMsg);
+            return;
+        }
+
         const respuestaFinal = (data.reply || "").trim();
 
+        // Detectar Plantilla Final Generada
         if (respuestaFinal.toLowerCase().includes("plantilla final generada")) {
             const usuario = localStorage.getItem("usuarioLogueado");
             const idReq = "REQ_" + Date.now();
             const htmlGenerado = convertirPlantillaAHTML(respuestaFinal);
             const tituloDetectado = extraerTitulo(respuestaFinal) || "Requerimiento sin título";
 
+            let adjuntosGuardados = [];
+
+            if (archivoTemporalGlobal) {
+                const archivoBase64 = await convertirABase64(archivoTemporalGlobal);
+                adjuntosGuardados.push(archivoBase64);
+                archivoTemporalGlobal = null;
+            }
+
             const db = JSON.parse(localStorage.getItem(STORAGE_KEY_REQ)) || [];
             db.push({
                 id: idReq,
                 titulo: tituloDetectado,
-                autor: usuario, // Esencial para filtrar
+                autor: usuario,
                 fecha: new Date().toLocaleString(),
                 timestamp: Date.now(),
                 contenido: htmlGenerado,
-                estado: "Pendiente"
+                estado: "Pendiente",
+                adjuntos: adjuntosGuardados
             });
             localStorage.setItem(STORAGE_KEY_REQ, JSON.stringify(db));
-            localStorage.setItem("reqTemporal", htmlGenerado);
         }
 
+        // Mostrar respuesta NOVA
         typingMsg.remove();
         const botMsg = document.createElement("div");
         botMsg.className = "message bot";
-        botMsg.innerHTML = `
-            <div class="message-icon">
-                <img src="img/bot.png">
-            </div>
-            <div class="message-content">
-                ${formatMessage(respuestaFinal)}
-            </div>
-        `;
+        botMsg.innerHTML = `<div class="message-icon"><img src="img/bot.png"></div><div class="message-content">${formatMessage(respuestaFinal)}</div>`;
         chat.appendChild(botMsg);
         scrollToBottom(true);
 
@@ -249,74 +283,49 @@ async function sendMessage() {
 
 function extraerTitulo(texto) {
     if (!texto) return null;
-
     const lineas = texto.replace(/<br\s*\/?>/gi, "\n").split("\n");
-
     for (let i = 0; i < lineas.length; i++) {
         const l = lineas[i].trim();
-
         if (/nombre del servicio|nombre del requerimiento|título|titulo/i.test(l)) {
             const partes = l.split(":");
-
-            if (partes[1]?.trim()) {
-                return partes[1].trim();
-            }
-
-            if (lineas[i + 1]?.trim()) {
-                return lineas[i + 1].trim();
-            }
+            if (partes[1]?.trim()) return partes[1].trim();
+            if (lineas[i + 1]?.trim()) return lineas[i + 1].trim();
         }
     }
-
     return null;
 }
 
 function convertirPlantillaAHTML(texto) {
     if (!texto) return "";
-
-    let limpio = texto
-        .replace(/<br\s*\/?>/gi, "\n")
-        .replace(/\r/g, "\n")
-        .replace(/\*/g, "")
-        .trim();
-
-    const lineas = limpio.split("\n");
+    let textoLimpio = texto.replace(/<br\s*\/?>/gi, "\n").replace(/\*/g, "");
+    const lineas = textoLimpio.split("\n");
     let html = `<div class="doc-clean-view">`;
 
     lineas.forEach((linea) => {
-
         let l = linea.trim();
-        if (!l) return;
+        if (!l || /plantilla final generada/i.test(l) || /Un requerimiento de servicio según ITIL/i.test(l) || /^Forma$/i.test(l)) return;
 
-        // Ignorar encabezado NOVA
-        if (/plantilla final generada/i.test(l)) return;
-        if (/Un requerimiento de servicio según ITIL/i.test(l)) return;
-
-        // Título principal
-        if (/plantilla para/i.test(l.toLowerCase())) {
+        if (l.toLowerCase().includes("plantilla para escalamiento")) {
             html += `<h1 class="doc-main-title">${l}</h1>`;
-            return;
+        } else if (
+            l.endsWith(":") ||
+            /nombre del servicio|tipo de requerimiento|objetivo|justificacion|beneficio|implicacion|descripcion funcional|criterios|alcance|requerimientos tecnicos|aprobadores|adjuntos relevantes|area tecnica|autor|centro de costos/i.test(l)
+        ) {
+            if (/adjuntos/i.test(l)) {
+                html += `<p class="doc-field-label"><strong>Adjuntos Relevantes:</strong></p>`;
+                html += `<div id="adjuntosContainer"></div>`;
+            } else if (l.includes(":") && l.split(":")[1].trim().length > 0) {
+                let partes = l.split(":");
+                let label = partes[0].trim();
+                let valor = partes.slice(1).join(":").trim();
+                html += `<p class="doc-field-label"><strong>${label}:</strong></p>`;
+                html += `<p class="doc-field-value">${valor}</p>`;
+            } else {
+                html += `<p class="doc-field-label"><strong>${l}</strong></p>`;
+            }
+        } else {
+            html += `<p class="doc-field-value">${l}</p>`;
         }
-
-        // Campo tipo "Label:"
-        if (l.endsWith(":")) {
-            html += `<p class="doc-field-label"><strong>${l}</strong></p>`;
-            return;
-        }
-
-        // Campo tipo "Label: valor"
-        if (l.includes(":")) {
-            const partes = l.split(":");
-            const label = partes[0].trim();
-            const valor = partes.slice(1).join(":").trim();
-
-            html += `<p class="doc-field-label"><strong>${label}:</strong></p>`;
-            html += `<p class="doc-field-value">${valor}</p>`;
-            return;
-        }
-
-        // Texto normal
-        html += `<p class="doc-field-value">${l}</p>`;
     });
 
     html += `</div>`;
@@ -330,7 +339,6 @@ function obtenerRequerimientos() {
     // Todos leen de la misma llave
     return JSON.parse(localStorage.getItem("requerimientos")) || [];
 }
-
 
 function cargarEventosReq() {
     const buscador = document.getElementById("buscadorReq");
@@ -487,7 +495,7 @@ async function descargarPDF() {
             const esSubtitulo =
                 l.endsWith(":");
 
-            let fontSize = 12;      
+            let fontSize = 12;
             let fontStyle = "normal";
 
             if (esTitulo) {
@@ -495,7 +503,7 @@ async function descargarPDF() {
                 fontStyle = "bold";
             }
             else if (esSubtitulo) {
-                fontSize = 7;      
+                fontSize = 7;
                 fontStyle = "bold";
             }
 
@@ -607,6 +615,7 @@ function cargarRequerimientoValidacion() {
     const db = obtenerRequerimientos();
     const reqActual = db.find(r => r.id === reqId);
 
+    // HTML del requerimiento
     const reqHTML = localStorage.getItem("reqTemporal") || reqActual?.contenido;
 
     if (!reqHTML) {
@@ -614,7 +623,7 @@ function cargarRequerimientoValidacion() {
         return;
     }
 
-    // 3. Si está rechazado, preparamos un banner de alerta para el usuario/admin
+    // Banner si el requerimiento fue rechazado
     let alertaMotivo = "";
     if (reqActual?.estado === "Rechazado" && reqActual?.comentario) {
         alertaMotivo = `
@@ -626,13 +635,25 @@ function cargarRequerimientoValidacion() {
             </div>`;
     }
 
+    // Insertamos el HTML y el banner
     contenedor.innerHTML = alertaMotivo + reqHTML;
 
-    const txtMotivo = document.getElementById("motivoRechazo");
-    if (txtMotivo) {
-        txtMotivo.value = reqActual?.comentario || "";
+    // Mostrar adjuntos si existen
+    if (reqActual?.adjuntos?.length > 0) {
+        const adjDiv = document.createElement("div");
+        adjDiv.innerHTML = "<h3>📎 Adjuntos</h3>";
+        reqActual.adjuntos.forEach(adj => {
+            const link = document.createElement("a");
+            link.href = adj.data;
+            link.download = adj.nombre;
+            link.textContent = adj.nombre;
+            link.style.display = "block";
+            adjDiv.appendChild(link);
+        });
+        contenedor.appendChild(adjDiv);
     }
 
+    // Restaurar checkboxes de validación
     const validaciones = JSON.parse(localStorage.getItem("validaciones")) || {};
     const estadoChecksGuardado = validaciones[reqId];
 
@@ -719,13 +740,12 @@ function actualizarEstadoRequerimiento(nuevoEstado) {
     if (!reqId) return;
 
     const requerimientos = JSON.parse(localStorage.getItem(STORAGE_KEY_REQ)) || [];
-
     const index = requerimientos.findIndex(r => r.id === reqId);
-    if (index === -1) return;
 
-    requerimientos[index].estado = nuevoEstado;
-
-    localStorage.setItem(STORAGE_KEY_REQ, JSON.stringify(requerimientos));
+    if (index >= 0) {
+        requerimientos[index].estado = nuevoEstado;
+        localStorage.setItem(STORAGE_KEY_REQ, JSON.stringify(requerimientos));
+    }
 }
 
 function guardarValidacionEstado() {
@@ -892,166 +912,60 @@ async function cambiarPassword() {
 /* =========================
    INIT GENERAL & SEGURIDAD
 ========================= */
+/* ================= Init General Unificado ================= */
 document.addEventListener("DOMContentLoaded", () => {
-
+    // 1. Variables de estado y contexto
     const usuario = localStorage.getItem("usuarioLogueado");
     const rol = localStorage.getItem("rol");
-    const paginaActual = window.location.pathname.split("/").pop();
-    const enLogin = paginaActual === "index.html" || paginaActual === "";
+    const paginaActual = window.location.pathname.split("/").pop() || "index.html";
+    const enLogin = paginaActual === "index.html";
 
-    // PROTECCIÓN DE ACCESO: USUARIO NO LOGUEADO
+    // 2. Protección de acceso y Seguridad
     if (!usuario && !enLogin) {
         window.location.href = "index.html";
         return;
     }
 
-    // PROTECCIÓN DE ACCESO: SEGÚN ROL (USER NO ENTRA A ADMIN)
-    const paginasSoloAdmin = [
-        "validacionRequerimiento.html",
-        "editar.html"
-    ];
-
-    // SOLO USER bloqueado
+    const paginasSoloAdmin = ["validacionRequerimiento.html", "editar.html"];
     if (rol === "user" && paginasSoloAdmin.includes(paginaActual)) {
-        console.warn(`Intento de acceso no autorizado por: ${usuario}`);
-        alert("🚫 No tienes permisos para acceder a esta sección de administración.");
+        alert("🚫 No tienes permisos para acceder a esta sección.");
         window.location.href = "inicio.html";
         return;
     }
 
+    // 3. Configuración de Interfaz según Rol
+    if (rol === "manager") document.body.classList.add("manager");
 
-    // USUARIO MANAGER
-    if (localStorage.getItem("rol") === "manager") {
-        document.body.classList.add("manager");
-    }
-    if (rol === "manager" && paginaActual === "validacion.html") {
-
-        const elementosOcultar = [
-            "btnEnviarJira",
-            "btnRechazar",
-            "btnEditar",
-            "btnAprobar",
-            "seccionChecks"
-        ];
-
+    if (rol === "user") {
+        const elementosOcultar = ["cardValidar", "navValidar", "btnEnviarJira"];
         elementosOcultar.forEach(id => {
             const el = document.getElementById(id);
-            if (el) {
-                el.style.display = "none";
-                el.disabled = true; // por seguridad
-            }
+            if (el) el.style.display = "none";
         });
-
-        // Asegurar que SOLO estos queden visibles
-        const btnDescargar = document.getElementById("btnDescargar");
-        const btnVolver = document.getElementById("btnVolver");
-
-        if (btnDescargar) btnDescargar.style.display = "inline-block";
-        if (btnVolver) btnVolver.style.display = "inline-block";
     }
 
-    if (rol === "manager") {
-        const titulo = document.getElementById("tituloSeccion");
-        if (titulo) {
-            titulo.textContent = "📋 Seguimiento de Requerimientos";
-        }
-
-        const checkPO = document.getElementById("checkPO");
-        const checkQA = document.getElementById("checkQA");
-
-        if (checkPO) checkPO.disabled = true;
-        if (checkQA) checkQA.disabled = true;
-    }
-
-    // CONTROL DE INACTIVIDAD
+    // 4. Sistema de Inactividad
     if (usuario) {
         localStorage.setItem("ultimaActividad", Date.now());
         setInterval(verificarInactividad, 30000);
     }
 
-    if (rol === "user") {
-        const elementosPrivados = [
-            "cardValidar",
-            "navValidar",
-            "btnEnviarJira",
-            "btnEditar",
-            "seccionChecks"
-        ];
-
-        elementosPrivados.forEach(id => {
-            const el = document.getElementById(id);
-            if (el) el.style.display = "none";
-        });
-
-        const editor = document.getElementById("editorContenido");
-        if (editor) {
-            editor.contentEditable = "false";
-            editor.style.userSelect = "text";
-        }
-    }
-
-    if (rol === "admin" && paginaActual === "resultado.html") {
-        const botonesTecnicos = [
-            "btnEnviarJira",
-            "btnRechazar",
-            "seccionChecks"
-        ];
-
-        botonesTecnicos.forEach(id => {
-            const el = document.getElementById(id);
-            if (el) el.style.display = "none";
-        });
-
-        const panelValidacion = document.querySelector(".validation-panel");
-        if (panelValidacion) panelValidacion.style.display = "none";
-    }
-
-    // CARGA DE DATOS SEGÚN PÁGINA
+    // 5. Manejo de Eventos de Teclado (Login y Chat)
     const passwordInput = document.getElementById("password");
-    if (passwordInput) passwordInput.addEventListener("keydown", e => {
-        if (e.key === "Enter") { e.preventDefault(); login(); }
-    });
+    if (passwordInput) {
+        passwordInput.addEventListener("keydown", e => {
+            if (e.key === "Enter") { e.preventDefault(); login(); }
+        });
+    }
 
     const userInput = document.getElementById("userInput");
-    if (userInput) userInput.addEventListener("keydown", e => {
-        if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
-    });
-
-    // Carga de lista de requerimientos (Solo en misRequerimientos.html)
-    const contenedorLista = document.getElementById("listaRequerimientos");
-    if (contenedorLista && paginaActual === "misRequerimientos.html") {
-        aplicarFiltrosReq();
-        cargarEventosReq();
-    }
-
-    // Carga de Bandeja Técnica (Solo en validacion.html)
-    if (paginaActual === "validacion.html") {
-        cargarBandejaValidacion();
-    }
-
-    // Carga de Vista de Validación o Detalle (resultado.html / validacionRequerimiento.html)
-    if (paginaActual === "resultado.html" || paginaActual === "validacionRequerimiento.html") {
-        cargarRequerimientoValidacion();
-        controlarValidaciones();
-
-        document.addEventListener("change", (e) => {
-            if (e.target.id === "checkPO" || e.target.id === "checkQA") {
-                guardarValidacionEstado();
-                controlarValidaciones();
-            }
+    if (userInput) {
+        userInput.addEventListener("keydown", e => {
+            if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
         });
     }
 
-    // Carga de Editor (Solo en editar.html)
-    if (paginaActual === "editar.html") {
-        const contenidoHTML = localStorage.getItem("reqTemporal");
-        const editor = document.getElementById("editorContenido");
-        if (contenidoHTML && editor) {
-            editor.innerHTML = contenidoHTML;
-        }
-    }
-
-    // Previsualización de archivos
+    // 6. Previsualización de Adjuntos (Global)
     const fileInput = document.getElementById("fileInput");
     const filePreview = document.getElementById("filePreview");
     if (fileInput && filePreview) {
@@ -1067,45 +981,103 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
+    // 7. Lógica Específica por Página
+
+    // --- MIS REQUERIMIENTOS ---
+    const contenedorLista = document.getElementById("listaRequerimientos");
+    if (contenedorLista && paginaActual === "misRequerimientos.html") {
+        const requerimientos = obtenerRequerimientos();
+        const propios = requerimientos.filter(r =>
+            r.autor?.trim().toLowerCase() === usuario.trim().toLowerCase()
+        );
+
+        actualizarContadorReq();
+
+        if (propios.length === 0) {
+            contenedorLista.innerHTML = '<div class="empty-state">📭 No tienes requerimientos registrados.</div>';
+        } else {
+            contenedorLista.innerHTML = "";
+            propios.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))
+                .forEach(req => {
+                    const fila = document.createElement("div");
+                    fila.className = "req-item";
+                    fila.innerHTML = `
+                        <div class="req-info">
+                            <span class="req-title"><strong>${req.titulo || "Sin título"}</strong></span>
+                            <span class="req-meta">📅 ${req.fecha}</span>
+                        </div>
+                        <div class="req-id">🆔 ${req.id}</div>
+                        <div class="req-status-badge ${obtenerClaseEstado(req.estado)}">${req.estado}</div>
+                    `;
+                    fila.addEventListener("click", () => verDetalleReq(req));
+                    contenedorLista.appendChild(fila);
+                });
+        }
+        aplicarFiltrosReq();
+        cargarEventosReq();
+    }
+
+    // --- RESULTADO / DETALLE ---
+    if (paginaActual === "resultado.html") {
+        const contenedorContenido = document.getElementById("resultadoContenido");
+        const reqDetalle = JSON.parse(localStorage.getItem("reqDetalle") || "{}");
+
+        if (contenedorContenido) {
+            contenedorContenido.innerHTML = reqDetalle?.contenido || "⚠️ No hay documento para mostrar.";
+        }
+
+        // Cargar adjuntos en el contenedor específico
+        const adjContainer = document.getElementById("adjuntosContainer");
+        if (adjContainer && reqDetalle?.adjuntos?.length) {
+            reqDetalle.adjuntos.forEach(adj => {
+                const link = document.createElement("a");
+                link.href = adj.data;
+                link.download = adj.nombre;
+                link.textContent = "📎 " + adj.nombre;
+                link.style.display = "block";
+                adjContainer.appendChild(link);
+            });
+        }
+    }
+
+    // --- VALIDACIÓN (Bandeja y Detalle) ---
+    if (paginaActual === "validacion.html") {
+        cargarBandejaValidacion();
+    }
+
+    if (paginaActual === "validacionRequerimiento.html") {
+        cargarRequerimientoValidacion();
+        controlarValidaciones();
+    }
+
+    // --- EDITOR ---
+    if (paginaActual === "editar.html") {
+        const contenidoHTML = localStorage.getItem("reqTemporal");
+        const editor = document.getElementById("editorContenido");
+        if (contenidoHTML && editor) editor.innerHTML = contenidoHTML;
+    }
+
+    // 8. Eventos de Validación (Checks)
+    document.addEventListener("change", (e) => {
+        if (e.target.id === "checkPO" || e.target.id === "checkQA") {
+            guardarValidacionEstado();
+            controlarValidaciones();
+        }
+    });
+
+    // 9. Botón Enviar a JIRA (Lógica de Negocio)
     const btnEnviar = document.getElementById("btnEnviarJira");
-
     if (btnEnviar) {
-        btnEnviar.disabled = false;
-
         btnEnviar.addEventListener("click", () => {
             const reqId = localStorage.getItem("reqValidandoId");
             const checkPO = document.getElementById("checkPO");
             const checkQA = document.getElementById("checkQA");
 
-            const rol = localStorage.getItem("rol");
-            if (!btnEnviar) return;
+            if (rol !== "admin") return alert("🚫 Solo ADMIN puede enviar a JIRA.");
+            if (!checkPO?.checked) return alert("⚠️ Falta la validación del Product Owner (PO).");
+            if (!checkQA?.checked) return alert("⚠️ Falta la validación de QA.");
 
-            if (rol === "manager") {
-                btnEnviar.style.display = "none";
-                btnEnviar.disabled = true;
-            }
-            if (rol !== "admin") {
-                alert("🚫 Solo ADMIN puede enviar a JIRA.");
-                return;
-            }
-
-            if (!checkPO || !checkQA) return;
-
-            if (!checkPO.checked && !checkQA.checked) {
-                alert("⚠️ Faltan las validaciones de PO y QA.");
-                return;
-            }
-            if (!checkPO.checked) {
-                alert("⚠️ Falta la validación del Product Owner (PO).");
-                return;
-            }
-            if (!checkQA.checked) {
-                alert("⚠️ Falta la validación de QA.");
-                return;
-            }
-
-            const confirmar = confirm(`🚀 ¿Enviar requerimiento ${reqId} a JIRA?`);
-            if (!confirmar) return;
+            if (!confirm(`🚀 ¿Enviar requerimiento ${reqId} a JIRA?`)) return;
 
             const requerimientos = obtenerRequerimientos();
             const index = requerimientos.findIndex(r => r.id === reqId);
@@ -1119,5 +1091,6 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
-    scrollToBottom(true);
+    // Finalizar scroll
+    if (typeof scrollToBottom === "function") scrollToBottom(true);
 });
