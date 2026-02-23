@@ -194,6 +194,39 @@ body {
     transform: rotate(20deg) scale(1.2);
 }
 
+.nav-actions {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+}
+
+/* PERFIL */
+.perfil-btn img {
+    height: 46px;
+    width: 46px;
+    border-radius: 50%;
+    object-fit: cover;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    border: 2px solid rgba(255, 255, 255, 0.4);
+}
+
+.perfil-btn img:hover {
+    transform: scale(1.12);
+    border-color: #ffffff;
+    box-shadow: 0 0 10px rgba(255, 250, 101, 0.6);
+}
+
+/* LOGOUT */
+.logout-btn img {
+    height: 50px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.logout-btn img:hover {
+    transform: rotate(15deg) scale(1.15);
+}
 
 /* =========================
    INICIO
@@ -721,9 +754,6 @@ body {
 }
 
 
-
-
-
 .validacion-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
@@ -1220,4 +1250,130 @@ textarea#editorContenido {
 .actions-buttons button.btn-danger:hover {
     background: #1a6aa0;
     transform: scale(1.03);
+}
+
+.btn-primary {
+    background: #e1893b;
+    font-size: 15px;
+    color: white;
+    border: none;
+    padding: 10px 18px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: 0.3s;
+}
+
+.btn-primary:hover {
+    background: #1b6fa5;
+}
+
+body.manager #btnEnviarJira {
+    display: none !important;
+}
+
+/* =========================
+   PERFIL
+========================= */
+
+.perfil-page {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.perfil-card {
+    background: white;
+    width: 100%;
+    max-width: 520px;
+    border-radius: 18px;
+    padding: 35px;
+    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.08);
+    border: 1px solid #e5e7eb;
+    animation: fadeIn 0.25s ease;
+}
+
+.perfil-header {
+    text-align: center;
+    margin-bottom: 30px;
+}
+
+.perfil-header img {
+    width: 110px;
+    height: 110px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 4px solid #e1893b;
+    margin-bottom: 15px;
+}
+
+.perfil-header h2 {
+    color: #273c75;
+    font-size: 22px;
+    margin-bottom: 6px;
+}
+
+.perfil-rol {
+    background: #eef3fb;
+    color: #273c75;
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.perfil-body {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    margin-bottom: 30px;
+}
+
+.perfil-item {
+    background: #f8fafc;
+    padding: 14px 16px;
+    border-radius: 12px;
+    border: 1px solid #e5e7eb;
+}
+
+.perfil-item label {
+    display: block;
+    font-size: 12px;
+    color: #6b7280;
+    margin-bottom: 3px;
+}
+
+.perfil-item span {
+    font-size: 15px;
+    font-weight: 500;
+    color: #111827;
+}
+
+.perfil-actions {
+    display: flex;
+    justify-content: space-between;
+    gap: 15px;
+}
+
+.perfil-actions button {
+    flex: 1;
+}
+
+.perfil-password {
+    margin-top: 25px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.perfil-password input {
+    padding: 10px;
+    border-radius: 8px;
+    border: 1px solid #dcdde1;
+    font-size: 14px;
+}
+
+.perfil-password h3 {
+    margin-bottom: 10px;
+    color: #273c75;
 }
