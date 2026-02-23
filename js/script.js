@@ -26,8 +26,6 @@ function formatMessage(text) {
     let formatted = text
         .replace(/hola/gi, "👋 Hola")
         .replace(/gracias/gi, "🙏 Gracias")
-        .replace(/incidente/gi, "⚠️ Incidente")
-        .replace(/requerimiento/gi, "📝 Requerimiento");
 
     return formatted.replace(/\n/g, "<br>");
 }
@@ -87,6 +85,7 @@ function logout() {
     window.location.href = "index.html";
 }
 
+
 /* =========================
    NAVEGACIÓN
 ========================= */
@@ -100,6 +99,9 @@ function irMisRequerimientos() {
 
 function irValidacion() {
     window.location.href = "validacion.html";
+}
+function irPerfil() {
+    window.location.href = "perfil.html";
 }
 
 function irAtrasSegunRol() {
@@ -256,12 +258,10 @@ function extraerTitulo(texto) {
         if (/nombre del servicio|nombre del requerimiento|título|titulo/i.test(l)) {
             const partes = l.split(":");
 
-            // Caso: "Título: Algo"
             if (partes[1]?.trim()) {
                 return partes[1].trim();
             }
 
-            // Caso en siguiente línea
             if (lineas[i + 1]?.trim()) {
                 return lineas[i + 1].trim();
             }
@@ -274,44 +274,49 @@ function extraerTitulo(texto) {
 function convertirPlantillaAHTML(texto) {
     if (!texto) return "";
 
-    let textoLimpio = texto.replace(/<br\s*\/?>/gi, "\n").replace(/\*/g, "");
+    let limpio = texto
+        .replace(/<br\s*\/?>/gi, "\n")
+        .replace(/\r/g, "\n")
+        .replace(/\*/g, "")
+        .trim();
 
-    const lineas = textoLimpio.split("\n");
+    const lineas = limpio.split("\n");
     let html = `<div class="doc-clean-view">`;
 
     lineas.forEach((linea) => {
+
         let l = linea.trim();
+        if (!l) return;
 
-        if (!l || /plantilla final generada/i.test(l)) {
-            return;
-        }
-        if (!l || /Un requerimiento de servicio según ITIL es una solicitud formal del usuario para acceder a un servicio, modificar una funcionalidad existente o recibir información.Se gestiona diferente a los incidentes./i.test(l)) {
-            return;
-        }
-        if (!l || /Forma/i.test(l)) {
-            return;
-        }
+        // Ignorar encabezado NOVA
+        if (/plantilla final generada/i.test(l)) return;
+        if (/Un requerimiento de servicio según ITIL/i.test(l)) return;
 
-
-        if (l.toLowerCase().includes("plantilla para escalamiento")) {
+        // Título principal
+        if (/plantilla para/i.test(l.toLowerCase())) {
             html += `<h1 class="doc-main-title">${l}</h1>`;
+            return;
         }
-        else if (l.endsWith(":") ||
-            /nombre del servicio|tipo de requerimiento|objetivo|justificacion|beneficio|implicacion|descripcion funcional|criterios|alcance|requerimientos tecnicos|aprobadores|adjuntos|area tecnica|autor|centro de costos/i.test(l)) {
 
-            if (l.includes(":") && l.split(":")[1].trim().length > 1) {
-                let partes = l.split(":");
-                let label = partes[0].trim();
-                let valor = partes.slice(1).join(":").trim();
-                html += `<p class="doc-field-label"><strong>${label}:</strong></p>`;
-                html += `<p class="doc-field-value">${valor}</p>`;
-            } else {
-                html += `<p class="doc-field-label"><strong>${l}</strong></p>`;
-            }
+        // Campo tipo "Label:"
+        if (l.endsWith(":")) {
+            html += `<p class="doc-field-label"><strong>${l}</strong></p>`;
+            return;
         }
-        else {
-            html += `<p class="doc-field-value">${l}</p>`;
+
+        // Campo tipo "Label: valor"
+        if (l.includes(":")) {
+            const partes = l.split(":");
+            const label = partes[0].trim();
+            const valor = partes.slice(1).join(":").trim();
+
+            html += `<p class="doc-field-label"><strong>${label}:</strong></p>`;
+            html += `<p class="doc-field-value">${valor}</p>`;
+            return;
         }
+
+        // Texto normal
+        html += `<p class="doc-field-value">${l}</p>`;
     });
 
     html += `</div>`;
@@ -440,6 +445,7 @@ async function descargarPDF() {
 
     try {
         const { jsPDF } = window.jspdf;
+
         const doc = new jsPDF({
             orientation: "portrait",
             unit: "mm",
@@ -457,7 +463,6 @@ async function descargarPDF() {
         let y = startY;
         let pageCount = 1;
 
-        // Encabezado
         doc.setFont("helvetica", "bold");
         doc.setFontSize(14);
         doc.text("Documento de Requerimiento", pageWidth / 2, 10, { align: "center" });
@@ -468,25 +473,21 @@ async function descargarPDF() {
 
         doc.line(margin, 12, pageWidth - margin, 12);
 
-        // Procesamiento del Texto
         const texto = element.innerText.trim();
         const lineasOriginales = texto.split("\n");
-
-        doc.setFontSize(9);
 
         lineasOriginales.forEach(linea => {
 
             const l = linea.trim();
             if (!l) return;
 
-            // Títulos / subtítulos
             const esTitulo =
                 l.toUpperCase() === l && l.length < 60;
 
             const esSubtitulo =
                 l.endsWith(":");
 
-            let fontSize = 9;
+            let fontSize = 12;      
             let fontStyle = "normal";
 
             if (esTitulo) {
@@ -494,7 +495,7 @@ async function descargarPDF() {
                 fontStyle = "bold";
             }
             else if (esSubtitulo) {
-                fontSize = 8;
+                fontSize = 7;      
                 fontStyle = "bold";
             }
 
@@ -521,7 +522,6 @@ async function descargarPDF() {
             y += 1;
         });
 
-        // Pie de Página
         doc.setFontSize(8);
         doc.setFont("helvetica", "normal");
         doc.text(
@@ -546,13 +546,13 @@ function cargarBandejaValidacion() {
     const contenedor = document.getElementById("listaRequerimientos");
     if (!contenedor) return;
 
+    const rol = localStorage.getItem("rol");
     const requerimientos = obtenerRequerimientos();
 
     requerimientos.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
 
     if (requerimientos.length === 0) {
-        contenedor.innerHTML = `<div class="empty-state">📭 No hay requerimientos para validar.</div>`;
-        contenedor.style.display = "block";
+        contenedor.innerHTML = `<div class="empty-state">📭 No hay requerimientos.</div>`;
         return;
     }
 
@@ -574,7 +574,9 @@ function cargarBandejaValidacion() {
             </div>
             <div class="val-card-footer">
                 <span class="val-badge ${obtenerClaseEstado(req.estado)}">${req.estado}</span>
-                <span style="font-size: 12px; color: #2282bf; font-weight: 500;">Revisar →</span>
+                <span style="font-size: 12px; color: #2282bf; font-weight: 500;">
+                    ${rol === "manager" ? "👁️ Ver →" : "Revisar →"}
+                </span>
             </div>
         `;
 
@@ -650,6 +652,12 @@ function rechazarRequerimiento() {
     const txtMotivo = document.getElementById("motivoRechazo");
     const motivo = txtMotivo ? txtMotivo.value.trim() : "";
 
+    const rol = localStorage.getItem("rol");
+    if (rol !== "admin") {
+        alert("🚫 Solo ADMIN puede rechazar.");
+        return;
+    }
+
     if (!motivo) {
         alert("⚠️ Por favor, ingresa un motivo para rechazar el requerimiento.");
         txtMotivo?.focus();
@@ -721,6 +729,9 @@ function actualizarEstadoRequerimiento(nuevoEstado) {
 }
 
 function guardarValidacionEstado() {
+    const rol = localStorage.getItem("rol");
+    if (rol !== "admin") return;
+
     const reqId = localStorage.getItem("reqValidandoId");
     if (!reqId) return;
 
@@ -733,8 +744,10 @@ function guardarValidacionEstado() {
         po: checkPO.checked,
         qa: checkQA.checked
     };
+
     const validaciones = JSON.parse(localStorage.getItem("validaciones")) || {};
     validaciones[reqId] = estadoChecks;
+
     localStorage.setItem("validaciones", JSON.stringify(validaciones));
 
     let requerimientos = obtenerRequerimientos();
@@ -743,14 +756,11 @@ function guardarValidacionEstado() {
     if (index !== -1) {
         const estadoActual = requerimientos[index].estado;
 
-        // Lógica de cambio de estado:
         if (checkPO.checked || checkQA.checked) {
-            // Si hay algún check, pasa a "En validación" (a menos que ya esté Aprobado/enviado)
             if (estadoActual !== "Aprobado") {
                 requerimientos[index].estado = "En validación";
             }
         } else {
-            // Si desmarcan ambos, vuelve a Pendiente
             requerimientos[index].estado = "Pendiente";
         }
 
@@ -770,6 +780,13 @@ function editarPDF() {
 }
 
 function guardarEdicion() {
+    const rol = localStorage.getItem("rol");
+
+    if (rol !== "admin") {
+        alert("🚫 No tienes permisos para editar.");
+        return;
+    }
+
     const editor = document.getElementById("editorContenido");
     const nuevoHTML = editor.innerHTML;
     const reqId = localStorage.getItem("reqValidandoId");
@@ -786,6 +803,89 @@ function guardarEdicion() {
 
         alert(`✅ Requerimiento ${reqId} guardado exitosamente`);
         window.location.href = "validacion.html";
+    }
+}
+
+/* =========================
+   PERFIL
+========================= */
+
+document.addEventListener("DOMContentLoaded", () => {
+    if (window.location.pathname.includes("perfil.html")) {
+        cargarPerfil();
+    }
+});
+
+async function cargarPerfil() {
+    const usuario = localStorage.getItem("usuarioLogueado");
+
+    if (!usuario) {
+        alert("Sesión expirada");
+        window.location.href = "index.html";
+        return;
+    }
+
+    try {
+        const resp = await fetch(`${API_URL}/perfil/${usuario}`);
+        const data = await resp.json();
+
+        if (!data.success) {
+            alert("No se pudo cargar el perfil");
+            return;
+        }
+
+        const u = data.usuario;
+
+        document.getElementById("perfilNombre").textContent = u.nombre_usuario;
+        document.getElementById("perfilCorreo").textContent = u.correo;
+        document.getElementById("perfilUsuario").textContent = u.nombre_usuario;
+        document.getElementById("perfilCentroCosto").textContent = u.centro_costo;
+
+    } catch (error) {
+        console.error("Error cargando perfil:", error);
+        alert("Error de conexión con el servidor");
+    }
+}
+
+// CAMBIAR CONTRASEÑA
+async function cambiarPassword() {
+
+    const usuario = localStorage.getItem("usuarioLogueado");
+    const actual = document.getElementById("passwordActual").value;
+    const nueva = document.getElementById("passwordNueva").value;
+
+    if (!actual || !nueva) {
+        alert("Completa todos los campos");
+        return;
+    }
+
+    try {
+
+        const resp = await fetch(`${API_URL}/cambiar-password`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ usuario, actual, nueva })
+        });
+
+        const data = await resp.json();
+
+        if (!data.success) {
+            alert(data.message || "No se pudo cambiar la contraseña");
+            return;
+        }
+
+        alert("✅ Contraseña actualizada. Debes iniciar sesión nuevamente.");
+
+        localStorage.removeItem("usuarioLogueado");
+        localStorage.removeItem("rol");
+
+        window.location.href = "index.html";
+
+    } catch (error) {
+
+        console.error("Error:", error);
+        alert("Error de conexión con el servidor");
+
     }
 }
 
@@ -807,16 +907,60 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // PROTECCIÓN DE ACCESO: SEGÚN ROL (USER NO ENTRA A ADMIN)
     const paginasSoloAdmin = [
-        "validacion.html",
         "validacionRequerimiento.html",
         "editar.html"
     ];
 
+    // SOLO USER bloqueado
     if (rol === "user" && paginasSoloAdmin.includes(paginaActual)) {
         console.warn(`Intento de acceso no autorizado por: ${usuario}`);
         alert("🚫 No tienes permisos para acceder a esta sección de administración.");
         window.location.href = "inicio.html";
         return;
+    }
+
+
+    // USUARIO MANAGER
+    if (localStorage.getItem("rol") === "manager") {
+        document.body.classList.add("manager");
+    }
+    if (rol === "manager" && paginaActual === "validacion.html") {
+
+        const elementosOcultar = [
+            "btnEnviarJira",
+            "btnRechazar",
+            "btnEditar",
+            "btnAprobar",
+            "seccionChecks"
+        ];
+
+        elementosOcultar.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) {
+                el.style.display = "none";
+                el.disabled = true; // por seguridad
+            }
+        });
+
+        // Asegurar que SOLO estos queden visibles
+        const btnDescargar = document.getElementById("btnDescargar");
+        const btnVolver = document.getElementById("btnVolver");
+
+        if (btnDescargar) btnDescargar.style.display = "inline-block";
+        if (btnVolver) btnVolver.style.display = "inline-block";
+    }
+
+    if (rol === "manager") {
+        const titulo = document.getElementById("tituloSeccion");
+        if (titulo) {
+            titulo.textContent = "📋 Seguimiento de Requerimientos";
+        }
+
+        const checkPO = document.getElementById("checkPO");
+        const checkQA = document.getElementById("checkQA");
+
+        if (checkPO) checkPO.disabled = true;
+        if (checkQA) checkQA.disabled = true;
     }
 
     // CONTROL DE INACTIVIDAD
@@ -932,6 +1076,18 @@ document.addEventListener("DOMContentLoaded", () => {
             const reqId = localStorage.getItem("reqValidandoId");
             const checkPO = document.getElementById("checkPO");
             const checkQA = document.getElementById("checkQA");
+
+            const rol = localStorage.getItem("rol");
+            if (!btnEnviar) return;
+
+            if (rol === "manager") {
+                btnEnviar.style.display = "none";
+                btnEnviar.disabled = true;
+            }
+            if (rol !== "admin") {
+                alert("🚫 Solo ADMIN puede enviar a JIRA.");
+                return;
+            }
 
             if (!checkPO || !checkQA) return;
 

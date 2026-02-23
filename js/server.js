@@ -75,6 +75,81 @@ app.post("/login", async (req, res) => {
     }
 });
 
+// OBTENER PERFIL
+app.get("/perfil/:usuario", async (req, res) => {
+
+    const { usuario } = req.params;
+
+    try {
+
+        const result = await pool.query(
+            `SELECT nombre_usuario, correo, centro_costo 
+             FROM usuarios_pgrr 
+             WHERE nombre_usuario = $1`,
+            [usuario]
+        );
+
+        if (result.rows.length === 0) {
+            return res.json({ success: false });
+        }
+
+        res.json({
+            success: true,
+            usuario: result.rows[0]
+        });
+
+    } catch (error) {
+
+        console.error("Error obteniendo perfil:", error);
+        res.status(500).json({ success: false });
+
+    }
+});
+
+// CAMBIAR CONTRASEÑA
+app.post("/cambiar-password", async (req, res) => {
+
+    const { usuario, actual, nueva } = req.body;
+
+    try {
+
+        const result = await pool.query(
+            `SELECT contrasena 
+             FROM usuarios_pgrr 
+             WHERE nombre_usuario = $1`,
+            [usuario]
+        );
+
+        if (result.rows.length === 0) {
+            return res.json({ success: false, message: "Usuario no encontrado" });
+        }
+
+        const hashGuardado = result.rows[0].contrasena;
+
+        const passwordValida = await bcrypt.compare(actual, hashGuardado);
+
+        if (!passwordValida) {
+            return res.json({ success: false, message: "Contraseña actual incorrecta" });
+        }
+
+        const nuevoHash = await bcrypt.hash(nueva, 10);
+
+        await pool.query(
+            `UPDATE usuarios_pgrr 
+             SET contrasena = $1 
+             WHERE nombre_usuario = $2`,
+            [nuevoHash, usuario]
+        );
+
+        res.json({ success: true });
+
+    } catch (error) {
+
+        console.error("Error cambiando contraseña:", error);
+        res.status(500).json({ success: false });
+
+    }
+});
 
 app.listen(3000, () => {
     console.log("Servidor corriendo en http://localhost:3000");

@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="icon" href="img/icono.png">
+    <title>Registro de Requerimientos</title>
+</head>
+
+<body>
+
+    <header class="main-header">
+        <div class="header-container">
+            <nav class="nav-menu">
+                <a href="#" class="logo">
+                    <img src="img/logo blanco.png" alt="Logo Empresa">
+                </a>
+                <div class="nav-links">
+                    <a href="inicio.html">Inicio</a>
+                    <a href="misRequerimientos.html">Mis Requerimientos</a>
+                    <a href="validacion.html" id="navValidar">Validación</a>
+                </div>
+                <div class="nav-actions">            
+                    <a href="#" class="logout-btn" onclick="logout()">
+                        <img src="img/log-out.png" alt="Salir">
+                    </a>
+                </div>
+            </nav>
+        </div>
+    </header>
+
+    <main class="main-content perfil-page">
+        <section class="perfil-card">
+
+            <div class="perfil-header">
+                <img src="img/usuario.png" alt="Avatar">
+                <h2 id="perfilNombre">Cargando...</h2>
+                <span class="perfil-rol" id="perfilCentroCosto">Centro de costo</span>
+            </div>
+
+            <div class="perfil-body">
+                <div class="perfil-item">
+                    <label>Correo</label>
+                    <span id="perfilCorreo">-</span>
+                </div>
+
+                <div class="perfil-item">
+                    <label>Usuario</label>
+                    <span id="perfilUsuario">-</span>
+                </div>
+            </div>
+
+            <hr>
+
+            <div class="perfil-password">
+                <h3>Cambiar contraseña</h3>
+
+                <input type="password" id="passActual" placeholder="Contraseña actual">
+                <input type="password" id="passNueva" placeholder="Nueva contraseña">
+                <input type="password" id="passConfirmar" placeholder="Confirmar contraseña">
+
+                <button class="btn-primary" onclick="cambiarPassword()">Actualizar contraseña</button>
+            </div>
+
+        </section>
+    </main>
+
+    <script src="js/script.js"></script>
+</body>
+
+</html>
