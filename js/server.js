@@ -83,9 +83,9 @@ app.get("/perfil/:usuario", async (req, res) => {
     try {
 
         const result = await pool.query(
-            `SELECT nombre_usuario, correo, centro_costo 
-             FROM usuarios_pgrr 
-             WHERE nombre_usuario = $1`,
+            `SELECT nombre_usuario, correo, centro_costo, genero
+            FROM usuarios_pgrr 
+            WHERE nombre_usuario = $1`,
             [usuario]
         );
 
