@@ -202,19 +202,24 @@ body {
 
 /* PERFIL */
 .perfil-btn img {
-    height: 46px;
-    width: 46px;
+    width: 40px;
+    height: 40px;
     border-radius: 50%;
     object-fit: cover;
-    cursor: pointer;
+    border: 2px solid rgba(255, 255, 255, 0.6);
+    padding: 2px;
+    background: rgba(255, 255, 255, 0.15);
+    backdrop-filter: blur(4px);
     transition: all 0.3s ease;
-    border: 2px solid rgba(255, 255, 255, 0.4);
+    cursor: pointer;
 }
-
 .perfil-btn img:hover {
     transform: scale(1.12);
-    border-color: #ffffff;
-    box-shadow: 0 0 10px rgba(255, 250, 101, 0.6);
+    border-color: #fffa65;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+.perfil-btn img:active {
+    transform: scale(0.95);
 }
 
 /* LOGOUT */
@@ -841,7 +846,7 @@ body {
     text-transform: uppercase;
 }
 
-/* Estilos específicos para la sección de rechazo */
+/* RECHAZO */
 .reject-reason-container {
     margin-top: 20px;
     padding-top: 15px;
@@ -1051,44 +1056,90 @@ textarea#editorContenido {
 /* =========================
    PLANTILLAS
 ========================= */
-.doc-clean-view {
-    padding: 30px;
+.doc-pro-view {
     background: #ffffff;
-    font-family: 'Segoe UI', Arial, sans-serif;
-    color: #1a202c;
-    text-align: left;
-    line-height: 1.4;
+    border-radius: 14px;
+    padding: 30px 35px;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.08);
+    font-family: "Segoe UI", sans-serif;
+    line-height: 1.6;
+    color: #2c3e50;
+    animation: fadeInDoc 0.4s ease;
+}
+
+@keyframes fadeInDoc {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
 }
 
 .doc-main-title {
-    font-size: 25px;
-    font-weight: bold;
-    color: #273c75;
-    text-align: center;
-    margin-bottom: 30px;
-    text-transform: uppercase;
-    border-bottom: 2px solid #273c75;
+    font-size: 26px;
+    margin-bottom: 25px;
+    color: #1f4e79;
+    border-bottom: 2px solid #eaeaea;
     padding-bottom: 10px;
-    display: block;
 }
 
-.doc-field-label {
-    font-size: 16px;
-    color: #273c75;
-    margin-top: 15px;
-    margin-bottom: 2px;
-    font-weight: bold;
-    text-transform: uppercase;
-}
-
-.doc-field-value {
-    font-size: 16px;
-    color: #000000;
-    margin-bottom: 8px;
+.doc-section-title {
+    font-size: 18px;
+    margin-top: 28px;
+    margin-bottom: 10px;
+    color: #2282bf;
+    border-left: 4px solid #2282bf;
     padding-left: 10px;
-    border-left: 2px solid #edf2f7;
+}
+.doc-subtitle {
+    font-size: 15px;
+    margin-top: 18px;
+    color: #34495e;
+    font-weight: 600;
 }
 
+.doc-list {
+    margin: 8px 0 12px 18px;
+    padding-left: 10px;
+}
+
+.doc-list li {
+    font-size: 14px;
+    margin-bottom: 4px;
+    color: #333;
+}
+.doc-phase {
+    font-size: 17px;
+    margin-top: 24px;
+    color: #34495e;
+    background: #f4f8fb;
+    padding: 8px 12px;
+    border-radius: 6px;
+}
+
+.doc-question {
+    font-size: 15px;
+    margin-top: 18px;
+    color: #2c3e50;
+    font-weight: 600;
+}
+
+.doc-label {
+    font-size: 14px;
+    margin-top: 14px;
+    color: #555;
+    font-weight: 600;
+}
+
+.doc-paragraph {
+    font-size: 14px;
+    margin: 6px 0;
+    color: #444;
+}
+
+.doc-bullet {
+    font-size: 14px;
+    margin-left: 20px;
+    margin-bottom: 4px;
+    color: #333;
+}
 
 
 /* =========================
@@ -1145,8 +1196,7 @@ textarea#editorContenido {
     padding: 20px;
     border-radius: 8px;
     border: 1px solid #e0e0e0;
-    min-height: 200px;
-    max-height: 450px;
+    max-height: 650px;
     font-size: 15px;
     color: #333;
     line-height: 1.6;
@@ -1299,12 +1349,22 @@ body.manager #btnEnviarJira {
 }
 
 .perfil-header img {
-    width: 110px;
-    height: 110px;
+    width: 115px;
+    height: 115px;
     border-radius: 50%;
     object-fit: cover;
-    border: 4px solid #e1893b;
     margin-bottom: 15px;
+
+    border: 3px solid #fff;
+    outline: 3px solid #e1893b;
+
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.2);
+    transition: 0.3s ease;
+}
+
+.perfil-header img:hover {
+    transform: scale(1.06) rotate(2deg);
+    box-shadow: 0 12px 30px rgba(225, 137, 59, 0.4);
 }
 
 .perfil-header h2 {

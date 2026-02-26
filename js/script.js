@@ -1,4 +1,5 @@
 const API_URL = "http://localhost:3000";
+const JIRA_WEBHOOK_URL = "https://n8n.comware.com.co/webhook-test/portal/jira";
 const NOVA_URL = "https://n8n.comware.com.co/webhook/chat-portalgestionderegistroderequerimientos";
 const STORAGE_KEY_REQ = "requerimientos";
 const TIEMPO_EXPIRACION = 10 * 60 * 1000;
@@ -43,10 +44,11 @@ function removeFile() {
    LOGIN / LOGOUT
 ========================= */
 async function login() {
-    const usuario = document.getElementById("usuario")?.value.trim();
+    // Convertimos el usuario a minúsculas
+    const usuarioInput = document.getElementById("usuario")?.value.trim().toLowerCase();
     const password = document.getElementById("password")?.value.trim();
 
-    if (!usuario || !password) {
+    if (!usuarioInput || !password) {
         alert("Por favor completa usuario y contraseña");
         return;
     }
@@ -55,14 +57,15 @@ async function login() {
         const response = await fetch(`${API_URL}/login`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ usuario, password })
+            body: JSON.stringify({ usuario: usuarioInput, password })
         });
 
         const data = await response.json();
         console.log("Backend:", data);
 
         if (data.success) {
-            localStorage.setItem("usuarioLogueado", data.usuario);
+            // Guardamos el usuario en minúsculas también para consistencia
+            localStorage.setItem("usuarioLogueado", data.usuario.toLowerCase());
             localStorage.setItem("rol", data.rol);
             localStorage.setItem("ultimaActividad", Date.now());
             localStorage.setItem("threadId", generarThreadId());
@@ -262,6 +265,16 @@ async function sendMessage() {
                 timestamp: Date.now(),
                 contenido: htmlGenerado,
                 estado: "Pendiente",
+
+                // CAMPOS NECESARIOS PARA JIRA
+                tipoCaso: "Requerimiento",
+                fechaSolucion: data.fechaSolucion || null,
+                encargadoId: data.encargadoId || null,
+                centro_costo: data.customfield_10120
+                    || (data.customFields && data.customFields["10120"])
+                    || extraerCentroCostoTexto(respuestaFinal)
+                    || null,
+
                 adjuntos: adjuntosGuardados
             });
             localStorage.setItem(STORAGE_KEY_REQ, JSON.stringify(db));
@@ -283,52 +296,142 @@ async function sendMessage() {
 
 function extraerTitulo(texto) {
     if (!texto) return null;
-    const lineas = texto.replace(/<br\s*\/?>/gi, "\n").split("\n");
+
+    // Convertir <br> en saltos de línea
+    const limpio = texto.replace(/<br\s*\/?>/gi, "\n");
+
+    const lineas = limpio.split("\n");
+
     for (let i = 0; i < lineas.length; i++) {
         const l = lineas[i].trim();
-        if (/nombre del servicio|nombre del requerimiento|título|titulo/i.test(l)) {
-            const partes = l.split(":");
-            if (partes[1]?.trim()) return partes[1].trim();
-            if (lineas[i + 1]?.trim()) return lineas[i + 1].trim();
+
+        // Detectar múltiples formas válidas
+        if (/(nombre\s+del\s+(servicio|requerimiento)|t[íi]tulo|servicio)/i.test(l)) {
+
+            // Caso: "Titulo: algo"
+            if (l.includes(":")) {
+                const partes = l.split(":");
+                const posible = partes.slice(1).join(":").trim();
+                if (posible && posible.length > 3) {
+                    return posible;
+                }
+            }
+
+            // Caso: título en la siguiente línea
+            const siguiente = lineas[i + 1]?.trim();
+            if (siguiente && siguiente.length > 3 && !/^-+$/.test(siguiente)) {
+                return siguiente;
+            }
         }
     }
+
+    return null;
+}
+
+function extraerCentroCostoTexto(texto) {
+    if (!texto) return null;
+
+    const lineas = texto.replace(/<br\s*\/?>/gi, "\n").split("\n");
+
+    for (let i = 0; i < lineas.length; i++) {
+        let l = lineas[i].trim();
+
+        if (/centro de costos?/i.test(l)) {
+
+            const partes = l.split(":");
+            if (partes.length > 1 && partes[1].trim()) {
+                return partes[1].trim();
+            }
+
+            for (let j = i + 1; j < lineas.length; j++) {
+                if (lineas[j].trim()) return lineas[j].trim();
+            }
+        }
+    }
+
     return null;
 }
 
 function convertirPlantillaAHTML(texto) {
     if (!texto) return "";
-    let textoLimpio = texto.replace(/<br\s*\/?>/gi, "\n").replace(/\*/g, "");
+
+    let textoLimpio = texto
+        .replace(/<br\s*\/?>/gi, "\n")
+        .replace(/\*/g, "");
+
     const lineas = textoLimpio.split("\n");
-    let html = `<div class="doc-clean-view">`;
 
-    lineas.forEach((linea) => {
+    let html = `<div class="doc-pro-view">`;
+    let enLista = false;
+
+    const cerrarLista = () => {
+        if (enLista) {
+            html += `</ul>`;
+            enLista = false;
+        }
+    };
+
+    lineas.forEach(linea => {
         let l = linea.trim();
-        if (!l || /plantilla final generada/i.test(l) || /Un requerimiento de servicio según ITIL/i.test(l) || /^Forma$/i.test(l)) return;
+        if (!l) return;
 
-        if (l.toLowerCase().includes("plantilla para escalamiento")) {
-            html += `<h1 class="doc-main-title">${l}</h1>`;
-        } else if (
-            l.endsWith(":") ||
-            /nombre del servicio|tipo de requerimiento|objetivo|justificacion|beneficio|implicacion|descripcion funcional|criterios|alcance|requerimientos tecnicos|aprobadores|adjuntos relevantes|area tecnica|autor|centro de costos/i.test(l)
+        // TITULO PRINCIPAL
+        if (/^Plantilla Final Generada/i.test(l)) {
+            cerrarLista();
+            html += `<h1 class="doc-main-title">📄 ${l}</h1>`;
+        }
+
+        // FASES
+        else if (/^Fase\s+\d+/i.test(l)) {
+            cerrarLista();
+            html += `<h2 class="doc-phase">${l}</h2>`;
+        }
+
+        // TITULOS IMPORTANTES (claves del documento)
+        else if (
+            /^(Tipo de gestión|Análisis de impacto|Impacto actual|Riesgos si NO|Impacto esperado|Prioridad asignada|Definición funcional|Reglas de negocio|Sistemas y fuentes|Ambientes involucrados|Criterios de aceptación|Alcance del requerimiento|Datos formales|Adjuntos asociados|Riesgos y consideraciones|Resumen ejecutivo)/i.test(l)
         ) {
-            if (/adjuntos/i.test(l)) {
-                html += `<p class="doc-field-label"><strong>Adjuntos Relevantes:</strong></p>`;
-                html += `<div id="adjuntosContainer"></div>`;
-            } else if (l.includes(":") && l.split(":")[1].trim().length > 0) {
-                let partes = l.split(":");
-                let label = partes[0].trim();
-                let valor = partes.slice(1).join(":").trim();
-                html += `<p class="doc-field-label"><strong>${label}:</strong></p>`;
-                html += `<p class="doc-field-value">${valor}</p>`;
-            } else {
-                html += `<p class="doc-field-label"><strong>${l}</strong></p>`;
+            cerrarLista();
+            html += `<h2 class="doc-section-title">${l}</h2>`;
+        }
+
+        // AS-IS / TO-BE
+        else if (/AS-IS|TO-BE/i.test(l)) {
+            cerrarLista();
+            html += `<h3 class="doc-subtitle">${l}</h3>`;
+        }
+
+        // PREGUNTAS
+        else if (/^\d+\.\s/.test(l)) {
+            cerrarLista();
+            html += `<h3 class="doc-question">${l}</h3>`;
+        }
+
+        // LABELS
+        else if (l.endsWith(":")) {
+            cerrarLista();
+            html += `<h4 class="doc-label">${l}</h4>`;
+        }
+
+        // BULLETS
+        else if (/^[-•]/.test(l)) {
+            if (!enLista) {
+                html += `<ul class="doc-list">`;
+                enLista = true;
             }
-        } else {
-            html += `<p class="doc-field-value">${l}</p>`;
+            html += `<li>${l.replace(/^[-•]\s*/, "")}</li>`;
+        }
+
+        // TEXTO NORMAL
+        else {
+            cerrarLista();
+            html += `<p class="doc-paragraph">${l}</p>`;
         }
     });
 
+    cerrarLista();
     html += `</div>`;
+
     return html;
 }
 
@@ -635,7 +738,6 @@ function cargarRequerimientoValidacion() {
             </div>`;
     }
 
-    // Insertamos el HTML y el banner
     contenedor.innerHTML = alertaMotivo + reqHTML;
 
     // Mostrar adjuntos si existen
@@ -653,7 +755,6 @@ function cargarRequerimientoValidacion() {
         contenedor.appendChild(adjDiv);
     }
 
-    // Restaurar checkboxes de validación
     const validaciones = JSON.parse(localStorage.getItem("validaciones")) || {};
     const estadoChecksGuardado = validaciones[reqId];
 
@@ -693,7 +794,7 @@ function rechazarRequerimiento() {
             requerimientos[index].estado = "Rechazado";
             requerimientos[index].comentario = motivo;
 
-            // También reseteamos los checks de aprobación al rechazar
+            // Resetear los checks de aprobación al rechazar
             const validaciones = JSON.parse(localStorage.getItem("validaciones")) || {};
             validaciones[reqId] = { po: false, qa: false };
 
@@ -706,6 +807,54 @@ function rechazarRequerimiento() {
     }
 }
 
+// ENVIAR A JIRA
+async function enviarAJira(req) {
+    try {
+        console.log("Enviando a JIRA:", req);
+
+        const response = await fetch(JIRA_WEBHOOK_URL, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+
+                tipoCaso: {
+                    TituloJira: req.titulo || "REQ",
+                    Subject: req.titulo || "Sin asunto",
+                    IdByProject: req.id || ""
+                },
+
+                textoFinal: req.contenido || "",
+                fechaSolucion: req.fechaSolucion || null,
+                fechaRegistro: req.timestamp
+                    ? new Date(req.timestamp).toISOString()
+                    : new Date().toISOString(),
+
+                encargadoId: req.encargadoId || null,
+
+                customfield_10120: req.centro_costo || null,
+
+                adjuntos: req.adjuntos || []
+
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error("Error enviando a JIRA");
+        }
+
+        const data = await response.json().catch(() => ({}));
+        console.log("Respuesta webhook JIRA:", data);
+
+        return true;
+
+    } catch (error) {
+        console.error("Error JIRA:", error);
+        alert("❌ Error enviando a JIRA");
+        return false;
+    }
+}
 
 function controlarValidaciones() {
     const checkPO = document.getElementById("checkPO");
@@ -839,6 +988,8 @@ document.addEventListener("DOMContentLoaded", () => {
 async function cargarPerfil() {
     const usuario = localStorage.getItem("usuarioLogueado");
 
+
+
     if (!usuario) {
         alert("Sesión expirada");
         window.location.href = "index.html";
@@ -861,6 +1012,21 @@ async function cargarPerfil() {
         document.getElementById("perfilUsuario").textContent = u.nombre_usuario;
         document.getElementById("perfilCentroCosto").textContent = u.centro_costo;
 
+        const icono = document.getElementById("perfilIcono");
+
+        if (icono && u.genero) {
+            if (u.genero === "F") {
+                icono.src = "img/mujer.png";
+            }
+            else if (u.genero === "M") {
+                icono.src = "img/hombre.png";
+            }
+            else {
+                icono.src = "img/avatar.png";
+            }
+        }
+
+        console.log("Perfil recibido:", u);
     } catch (error) {
         console.error("Error cargando perfil:", error);
         alert("Error de conexión con el servidor");
@@ -871,8 +1037,8 @@ async function cargarPerfil() {
 async function cambiarPassword() {
 
     const usuario = localStorage.getItem("usuarioLogueado");
-    const actual = document.getElementById("passwordActual").value;
-    const nueva = document.getElementById("passwordNueva").value;
+    const actual = document.getElementById("passActual").value;
+    const nueva = document.getElementById("passNueva").value;
 
     if (!actual || !nueva) {
         alert("Completa todos los campos");
@@ -880,14 +1046,18 @@ async function cambiarPassword() {
     }
 
     try {
-
         const resp = await fetch(`${API_URL}/cambiar-password`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ usuario, actual, nueva })
         });
 
+        if (!resp.ok) {
+            throw new Error(`HTTP error! status: ${resp.status}`);
+        }
+
         const data = await resp.json();
+        console.log("Respuesta cambiar-password:", data);
 
         if (!data.success) {
             alert(data.message || "No se pudo cambiar la contraseña");
@@ -895,45 +1065,44 @@ async function cambiarPassword() {
         }
 
         alert("✅ Contraseña actualizada. Debes iniciar sesión nuevamente.");
-
         localStorage.removeItem("usuarioLogueado");
         localStorage.removeItem("rol");
-
         window.location.href = "index.html";
 
     } catch (error) {
-
-        console.error("Error:", error);
-        alert("Error de conexión con el servidor");
-
+        console.error("Error cambiar-password:", error);
+        alert("Error de conexión o servidor al cambiar la contraseña");
     }
 }
 
 /* =========================
    INIT GENERAL & SEGURIDAD
 ========================= */
-/* ================= Init General Unificado ================= */
 document.addEventListener("DOMContentLoaded", () => {
-    // 1. Variables de estado y contexto
+
     const usuario = localStorage.getItem("usuarioLogueado");
     const rol = localStorage.getItem("rol");
     const paginaActual = window.location.pathname.split("/").pop() || "index.html";
     const enLogin = paginaActual === "index.html";
 
-    // 2. Protección de acceso y Seguridad
+    // Protección de acceso y Seguridad
     if (!usuario && !enLogin) {
         window.location.href = "index.html";
         return;
     }
 
     const paginasSoloAdmin = ["validacionRequerimiento.html", "editar.html"];
-    if (rol === "user" && paginasSoloAdmin.includes(paginaActual)) {
-        alert("🚫 No tienes permisos para acceder a esta sección.");
+    if (rol !== "admin" && paginasSoloAdmin.includes(paginaActual)) {
         window.location.href = "inicio.html";
         return;
     }
 
-    // 3. Configuración de Interfaz según Rol
+    const paginasSoloAdminManager = ["validacion.html"];
+    if (paginasSoloAdminManager.includes(paginaActual) && (rol !== "admin" && rol !== "manager")) {
+        window.location.href = "inicio.html";
+        return;
+    }
+    // Configuración de Interfaz según Rol
     if (rol === "manager") document.body.classList.add("manager");
 
     if (rol === "user") {
@@ -944,13 +1113,11 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
-    // 4. Sistema de Inactividad
     if (usuario) {
         localStorage.setItem("ultimaActividad", Date.now());
         setInterval(verificarInactividad, 30000);
     }
 
-    // 5. Manejo de Eventos de Teclado (Login y Chat)
     const passwordInput = document.getElementById("password");
     if (passwordInput) {
         passwordInput.addEventListener("keydown", e => {
@@ -965,7 +1132,7 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
-    // 6. Previsualización de Adjuntos (Global)
+    // Previsualización de Adjuntos (Global)
     const fileInput = document.getElementById("fileInput");
     const filePreview = document.getElementById("filePreview");
     if (fileInput && filePreview) {
@@ -980,8 +1147,6 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         });
     }
-
-    // 7. Lógica Específica por Página
 
     // --- MIS REQUERIMIENTOS ---
     const contenedorLista = document.getElementById("listaRequerimientos");
@@ -1020,27 +1185,56 @@ document.addEventListener("DOMContentLoaded", () => {
     // --- RESULTADO / DETALLE ---
     if (paginaActual === "resultado.html") {
         const contenedorContenido = document.getElementById("resultadoContenido");
-        const reqDetalle = JSON.parse(localStorage.getItem("reqDetalle") || "{}");
+        if (!contenedorContenido) return;
 
-        if (contenedorContenido) {
-            contenedorContenido.innerHTML = reqDetalle?.contenido || "⚠️ No hay documento para mostrar.";
+        let reqDetalle = null;
+        const reqIdValidando = localStorage.getItem("reqValidandoId");
+        const db = obtenerRequerimientos();
+
+        if (reqIdValidando) {
+            reqDetalle = db.find(r => r.id === reqIdValidando) || null;
+            // Limpiamos reqDetalle viejo
+            localStorage.removeItem("reqDetalle");
+        } else if (localStorage.getItem("reqDetalle")) {
+            reqDetalle = JSON.parse(localStorage.getItem("reqDetalle"));
         }
 
-        // Cargar adjuntos en el contenedor específico
-        const adjContainer = document.getElementById("adjuntosContainer");
-        if (adjContainer && reqDetalle?.adjuntos?.length) {
+        if (!reqDetalle) {
+            contenedorContenido.innerHTML = "⚠️ No hay requerimiento para mostrar.";
+            return;
+        }
+
+        // Banner de rechazo si aplica
+        let alertaMotivo = "";
+        if (reqDetalle.estado === "Rechazado" && reqDetalle.comentario) {
+            alertaMotivo = `
+        <div class="reject-alert" style="background: #fdf2f2; border-left: 5px solid #e74c3c; padding: 15px; margin-bottom: 20px; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+            <h4 style="color: #e74c3c; margin: 0; font-size: 16px;">❌ Requerimiento Rechazado</h4>
+            <p style="margin: 8px 0 0; color: #555; font-size: 14px; line-height: 1.4;">
+                <strong>Motivo del rechazo:</strong> ${reqDetalle.comentario}
+            </p>
+        </div>`;
+        }
+
+        contenedorContenido.innerHTML = alertaMotivo + (reqDetalle.contenido || "⚠️ No hay documento para mostrar.");
+
+        // Mostrar adjuntos si existen
+        if (reqDetalle.adjuntos?.length > 0) {
+            const adjDiv = document.getElementById("adjuntosContainer") || document.createElement("div");
+            adjDiv.id = "adjuntosContainer";
+            adjDiv.innerHTML = "<h3>📎 Adjuntos</h3>";
             reqDetalle.adjuntos.forEach(adj => {
                 const link = document.createElement("a");
                 link.href = adj.data;
                 link.download = adj.nombre;
-                link.textContent = "📎 " + adj.nombre;
+                link.textContent = adj.nombre;
                 link.style.display = "block";
-                adjContainer.appendChild(link);
+                adjDiv.appendChild(link);
             });
+            contenedorContenido.appendChild(adjDiv);
         }
     }
 
-    // --- VALIDACIÓN (Bandeja y Detalle) ---
     if (paginaActual === "validacion.html") {
         cargarBandejaValidacion();
     }
@@ -1057,7 +1251,6 @@ document.addEventListener("DOMContentLoaded", () => {
         if (contenidoHTML && editor) editor.innerHTML = contenidoHTML;
     }
 
-    // 8. Eventos de Validación (Checks)
     document.addEventListener("change", (e) => {
         if (e.target.id === "checkPO" || e.target.id === "checkQA") {
             guardarValidacionEstado();
@@ -1065,10 +1258,10 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     });
 
-    // 9. Botón Enviar a JIRA (Lógica de Negocio)
+    // Boton enviar a JIRA
     const btnEnviar = document.getElementById("btnEnviarJira");
     if (btnEnviar) {
-        btnEnviar.addEventListener("click", () => {
+        btnEnviar.addEventListener("click", async () => {
             const reqId = localStorage.getItem("reqValidandoId");
             const checkPO = document.getElementById("checkPO");
             const checkQA = document.getElementById("checkQA");
@@ -1082,12 +1275,24 @@ document.addEventListener("DOMContentLoaded", () => {
             const requerimientos = obtenerRequerimientos();
             const index = requerimientos.findIndex(r => r.id === reqId);
 
-            if (index !== -1) {
-                requerimientos[index].estado = "Aprobado";
-                localStorage.setItem("requerimientos", JSON.stringify(requerimientos));
-                alert(`✅ Requerimiento ${reqId} enviado exitosamente.`);
-                window.location.href = "validacion.html";
-            }
+            if (index === -1) return alert("⚠️ Requerimiento no encontrado");
+
+
+            const req = requerimientos[index];
+
+            // Enviar al webhook
+            const enviado = await enviarAJira(req);
+
+            if (!enviado) return;
+
+            requerimientos[index].estado = "Aprobado";
+            requerimientos[index].enviadoAJira = true;
+            requerimientos[index].fechaEnvioJira = new Date().toLocaleString();
+
+            localStorage.setItem("requerimientos", JSON.stringify(requerimientos));
+
+            alert(`✅ Requerimiento ${reqId} enviado a JIRA 🚀`);
+            window.location.href = "validacion.html";
         });
     }
 
