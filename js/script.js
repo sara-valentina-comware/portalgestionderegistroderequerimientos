@@ -5,6 +5,29 @@ const STORAGE_KEY_REQ = "requerimientos";
 const TIEMPO_EXPIRACION = 10 * 60 * 1000;
 let archivosTemporalesGlobal = [];
 
+/* =========================
+   MANEJO DE ADJUNTOS
+========================= */
+
+document.addEventListener("DOMContentLoaded", function () {
+
+    const fileInput = document.getElementById("fileInput");
+
+    if (!fileInput) return;
+
+    fileInput.addEventListener("change", function () {
+
+        for (let i = 0; i < this.files.length; i++) {
+            archivosTemporalesGlobal.push(this.files[i]);
+        }
+
+        renderFilePreview();
+
+        this.value = "";
+    });
+
+});
+
 function generarThreadId() {
     return "thread_" + Date.now();
 }
@@ -161,6 +184,7 @@ function cerrarSesionPorInactividad() {
 
 ["click", "mousemove", "keydown", "scroll", "touchstart"]
     .forEach(evento => document.addEventListener(evento, actualizarActividad));
+
 
 /* =========================
    CHATBOT NOVA
@@ -1246,21 +1270,25 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Previsualización de Adjuntos (Global)
     function renderFilePreview() {
-        const filePreview = document.getElementById("filePreview");
-        if (!filePreview) return;
 
-        filePreview.innerHTML = "";
+    const filePreview = document.getElementById("filePreview");
+    if (!filePreview) return;
 
-        archivosTemporalesGlobal.forEach((file, index) => {
-            const chip = document.createElement("div");
-            chip.classList.add("file-chip");
-            chip.innerHTML = `
-            📎 ${file.name} 
-            <button onclick="removeFile(${index})">✖</button>
+    filePreview.innerHTML = "";
+
+    archivosTemporalesGlobal.forEach((file, index) => {
+
+        const fileItem = document.createElement("div");
+        fileItem.className = "file-item";
+
+        fileItem.innerHTML = `
+            📎 ${file.name}
+            <button onclick="removeFile(${index})">❌</button>
         `;
-            filePreview.appendChild(chip);
-        });
-    }
+
+        filePreview.appendChild(fileItem);
+    });
+}
 
     const fileInput = document.getElementById("fileInput");
     const filePreview = document.getElementById("filePreview");
