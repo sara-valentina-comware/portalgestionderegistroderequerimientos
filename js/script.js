@@ -251,8 +251,9 @@ async function sendMessage() {
 
         // Detectar Plantilla Final Generada
         if (respuestaFinal.toLowerCase().includes("plantilla final generada")) {
+
             const usuario = localStorage.getItem("usuarioLogueado");
-            const idReq = "REQ_" + Date.now();
+
             const htmlGenerado = convertirPlantillaAHTML(respuestaFinal);
             const tituloDetectado = extraerTitulo(respuestaFinal) || "Requerimiento sin título";
 
@@ -262,12 +263,25 @@ async function sendMessage() {
                 adjuntosGuardados.push(archivoBase64);
             }
 
-            // Ahora sí limpiar
             removeFile();
-            
             archivosTemporalesGlobal = [];
 
+            // 🔢 GENERAR ID CORTO
             const db = JSON.parse(localStorage.getItem(STORAGE_KEY_REQ)) || [];
+
+            let siguienteNumero = 1;
+
+            if (db.length > 0) {
+                const numeros = db.map(r => {
+                    const match = r.id?.match(/\d+/);
+                    return match ? parseInt(match[0]) : 0;
+                });
+
+                siguienteNumero = Math.max(...numeros) + 1;
+            }
+
+            const idReq = "REQ_" + String(siguienteNumero).padStart(4, "0");
+
             db.push({
                 id: idReq,
                 titulo: tituloDetectado,
@@ -281,7 +295,6 @@ async function sendMessage() {
                     data.prioridad || extraerPrioridadTexto(respuestaFinal)
                 ),
 
-                // CAMPOS NECESARIOS PARA JIRA
                 tipoCaso: "Requerimiento",
                 fechaSolucion: data.fechaSolucion || null,
                 encargadoId: data.encargadoId || null,
@@ -292,6 +305,7 @@ async function sendMessage() {
 
                 adjuntos: adjuntosGuardados
             });
+
             localStorage.setItem(STORAGE_KEY_REQ, JSON.stringify(db));
         }
 
@@ -414,16 +428,21 @@ function normalizarPrioridad(valor) {
 function convertirPlantillaAHTML(texto) {
     if (!texto) return "";
 
+    // 🔥 Extraer título principal
+    const tituloPrincipal = extraerTitulo(texto) || "Requerimiento";
+
     let textoLimpio = texto
         .replace(/<br\s*\/?>/gi, "\n")
         .replace(/\*/g, "");
 
     const lineas = textoLimpio.split("\n");
 
-    let html = `<div class="doc-pro-view">`;
-    let enLista = false;
+    let html = `
+        <div class="doc-pro-view">
+            <h1 class="doc-main-title">${tituloPrincipal}</h1>
+    `;
 
-    let tituloPrincipal = null;
+    let enLista = false;
 
     const cerrarLista = () => {
         if (enLista) {
@@ -432,50 +451,46 @@ function convertirPlantillaAHTML(texto) {
         }
     };
 
-    lineas.forEach((linea, index) => {
+    lineas.forEach((linea) => {
         let l = linea.trim();
         if (!l) return;
 
-        // 🔥 EXTRAER TITULO Y NO MOSTRARLO COMO CONTENIDO
+        // ❌ No mostrar línea del título dentro del contenido
         if (/^t[íi]tulo del requerimiento/i.test(l)) {
-            const partes = l.split(":");
-            tituloPrincipal = partes.slice(1).join(":").trim();
-            return; // ❌ No se renderiza esta línea
+            return;
         }
 
-        // 🔥 REEMPLAZAR "PLANTILLA FINAL GENERADA" POR EL TITULO REAL
-        if (/^Plantilla Final Generada/i.test(l)) {
-            cerrarLista();
-            html += `<h1 class="doc-main-title">📄 ${tituloPrincipal || "Requerimiento"}</h1>`;
-        }
-
-        // FASES
-        else if (/^Fase\s+\d+/i.test(l)) {
-            cerrarLista();
-            html += `<h2 class="doc-phase">${l}</h2>`;
-        }
-
-        // TITULOS IMPORTANTES
+        // ==============================
+        // 🎯 TITULOS SECUNDARIOS (H2)
+        // ==============================
         else if (
-            /^(Tipo de gestión|Análisis de impacto|Impacto actual|Riesgos si NO|Impacto esperado|Prioridad asignada|Definición funcional|Reglas de negocio|Sistemas y componentes involucrados|Ambientes involucrados|Criterios de aceptación|Alcance del requerimiento|Datos formales|Adjuntos asociados|Riesgos identificados|Beneficios esperados|Usuarios afectados|Área o proceso impactado|Objetivo de la solución|Descripción breve de la necesidad|Problema que se busca resolver|Descripción del proceso actual|Descripción general de la solución requerida|Exclusiones del alcance|Implicaciones si no se realiza la solución|Área técnica responsable del desarrollo|Autor del requerimiento|Centro de Costos asociado)/i.test(l)
+            /^(Descripción breve de la necesidad|Problema que se busca resolver|Área o proceso impactado|Objetivo de la solución|Descripción del proceso actual \(AS-IS\)|Descripción general de la solución requerida \(TO-BE\)|Alcance del requerimiento \(incluye\)|Exclusiones del alcance|Riesgos identificados|Criterios de aceptación|Área técnica responsable del desarrollo|Autor del requerimiento|Centro de Costos asociado|Adjuntos asociados al requerimiento)/i.test(l)
         ) {
             cerrarLista();
             html += `<h2 class="doc-section-title">${l}</h2>`;
         }
 
-        // AS-IS / TO-BE
-        else if (/AS-IS|TO-BE/i.test(l)) {
+        // ==============================
+        // 🎯 SUBTITULOS (H3)
+        // ==============================
+        else if (
+            /^(Tipo de gestión|Tipo de gestión:|Tipo de solicitud|Tipo de solicitud:|Usuarios afectados|Principales fallas o dolores del proceso actual|Sistemas y componentes involucrados|Reglas o políticas que la solución debe cumplir|Aprobaciones y validaciones requeridas dentro del flujo|Implicaciones si no se realiza la solución|Ambiente\(s\) impactado\(s\))/i.test(l)
+        ) {
             cerrarLista();
             html += `<h3 class="doc-subtitle">${l}</h3>`;
         }
 
-        // LABELS
+        // ==============================
+        // 🔹 LABELS (terminan en :)
+        // ==============================
         else if (l.endsWith(":")) {
             cerrarLista();
             html += `<h4 class="doc-label">${l}</h4>`;
         }
 
-        // BULLETS
+        // ==============================
+        // 🔹 BULLETS
+        // ==============================
         else if (/^[-•]/.test(l)) {
             if (!enLista) {
                 html += `<ul class="doc-list">`;
@@ -484,7 +499,9 @@ function convertirPlantillaAHTML(texto) {
             html += `<li>${l.replace(/^[-•]\s*/, "")}</li>`;
         }
 
-        // TEXTO NORMAL
+        // ==============================
+        // 🔹 TEXTO NORMAL
+        // ==============================
         else {
             cerrarLista();
             html += `<p class="doc-paragraph">${l}</p>`;
@@ -492,6 +509,7 @@ function convertirPlantillaAHTML(texto) {
     });
 
     cerrarLista();
+
     html += `</div>`;
 
     return html;
@@ -1297,56 +1315,79 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // --- RESULTADO / DETALLE ---
     if (paginaActual === "resultado.html") {
+
         const contenedorContenido = document.getElementById("resultadoContenido");
         if (!contenedorContenido) return;
 
-        let reqDetalle = null;
-        const reqIdValidando = localStorage.getItem("reqValidandoId");
+        const reqId = localStorage.getItem("reqValidandoId");
         const db = obtenerRequerimientos();
 
-        if (reqIdValidando && localStorage.getItem("origenNavegacion") === "validacion") {
-            reqDetalle = db.find(r => r.id === reqIdValidando) || null;
-            // Limpiamos reqDetalle viejo
-            localStorage.removeItem("reqDetalle");
-        } else if (localStorage.getItem("reqDetalle")) {
-            const temp = JSON.parse(localStorage.getItem("reqDetalle"));
-
-            // 🔥 Buscar siempre el requerimiento real desde la base
-            reqDetalle = db.find(r => r.id === temp.id) || temp;
-        }
-
-        if (!reqDetalle) {
+        if (!reqId) {
             contenedorContenido.innerHTML = "⚠️ No hay requerimiento para mostrar.";
             return;
         }
 
-        // Banner de rechazo si aplica
+        const reqDetalle = db.find(r => r.id === reqId);
+
+        if (!reqDetalle) {
+            contenedorContenido.innerHTML = "⚠️ No se encontró el requerimiento.";
+            return;
+        }
+
+        // 🔴 Banner de rechazo si aplica
         let alertaMotivo = "";
         if (reqDetalle.estado === "Rechazado" && reqDetalle.comentario) {
             alertaMotivo = `
-        <div class="reject-alert" style="background: #fdf2f2; border-left: 5px solid #e74c3c; padding: 15px; margin-bottom: 20px; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
-            <h4 style="color: #e74c3c; margin: 0; font-size: 16px;">❌ Requerimiento Rechazado</h4>
-            <p style="margin: 8px 0 0; color: #555; font-size: 14px; line-height: 1.4;">
-                <strong>Motivo del rechazo:</strong> ${reqDetalle.comentario}
-            </p>
-        </div>`;
+            <div class="reject-alert" style="
+                background: #fdf2f2;
+                border-left: 5px solid #e74c3c;
+                padding: 15px;
+                margin-bottom: 20px;
+                border-radius: 4px;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            ">
+                <h4 style="color: #e74c3c; margin: 0; font-size: 16px;">
+                    ❌ Requerimiento Rechazado
+                </h4>
+                <p style="margin: 8px 0 0; color: #555; font-size: 14px; line-height: 1.4;">
+                    <strong>Motivo del rechazo:</strong> ${reqDetalle.comentario}
+                </p>
+            </div>`;
         }
 
-        contenedorContenido.innerHTML = alertaMotivo + (reqDetalle.contenido || "⚠️ No hay documento para mostrar.");
+        contenedorContenido.innerHTML =
+            alertaMotivo + (reqDetalle.contenido || "⚠️ No hay documento para mostrar.");
 
-        // Mostrar adjuntos si existen
-        if (reqDetalle.adjuntos?.length > 0) {
-            const adjDiv = document.getElementById("adjuntosContainer") || document.createElement("div");
-            adjDiv.id = "adjuntosContainer";
-            adjDiv.innerHTML = "<h3>📎 Adjuntos</h3>";
+        //  Mostrar adjuntos si existen
+        if (reqDetalle.adjuntos && reqDetalle.adjuntos.length > 0) {
+
+            const adjDiv = document.createElement("div");
+            adjDiv.style.marginTop = "30px";
+            adjDiv.style.padding = "15px";
+            adjDiv.style.background = "#f8f9fb";
+            adjDiv.style.borderRadius = "8px";
+            adjDiv.style.border = "1px solid #e0e6ed";
+
+            const tituloAdj = document.createElement("h3");
+            tituloAdj.textContent = "📎 Adjuntos";
+            tituloAdj.style.marginBottom = "10px";
+            adjDiv.appendChild(tituloAdj);
+
             reqDetalle.adjuntos.forEach(adj => {
+
                 const link = document.createElement("a");
                 link.href = adj.data;
                 link.download = adj.nombre;
-                link.textContent = adj.nombre;
+                link.textContent = "⬇ " + adj.nombre;
                 link.style.display = "block";
+                link.style.marginBottom = "8px";
+                link.style.color = "#2282bf";
+                link.style.textDecoration = "none";
+                link.style.fontWeight = "500";
+
                 adjDiv.appendChild(link);
             });
+
             contenedorContenido.appendChild(adjDiv);
         }
     }
