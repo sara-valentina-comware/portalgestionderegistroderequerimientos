@@ -3,7 +3,7 @@ const JIRA_WEBHOOK_URL = "https://n8n.comware.com.co/webhook-test/portal/jira";
 const NOVA_URL = "https://n8n.comware.com.co/webhook/chat-portalgestionderegistroderequerimientos";
 const STORAGE_KEY_REQ = "requerimientos";
 const TIEMPO_EXPIRACION = 10 * 60 * 1000;
-let archivoTemporalGlobal = null;
+let archivosTemporalesGlobal = [];
 
 function generarThreadId() {
     return "thread_" + Date.now();
@@ -32,12 +32,20 @@ function formatMessage(text) {
     return formatted.replace(/\n/g, "<br>");
 }
 
-function removeFile() {
+function removeFile(index = null) {
     const fileInput = document.getElementById("fileInput");
     const filePreview = document.getElementById("filePreview");
 
-    if (fileInput) fileInput.value = "";
-    if (filePreview) filePreview.innerHTML = "";
+    if (index === null) {
+        // limpiar todo
+        archivosTemporalesGlobal = [];
+        if (fileInput) fileInput.value = "";
+        if (filePreview) filePreview.innerHTML = "";
+    } else {
+        // eliminar uno específico
+        archivosTemporalesGlobal.splice(index, 1);
+        renderFilePreview();
+    }
 }
 
 /* =========================
@@ -164,31 +172,29 @@ async function sendMessage() {
 
     if (!input || !chat) return;
     const userText = input.value.trim();
-    const file = fileInput?.files[0];
-    if (file) archivoTemporalGlobal = file;
+    const files = [...archivosTemporalesGlobal];
 
     function convertirABase64(file) {
-        return new Promise((resolve) => {
+        return new Promise((resolve, reject) => {
             const reader = new FileReader();
-            reader.onload = function (e) {
-                resolve({
-                    nombre: file.name,
-                    tipo: file.type,
-                    data: e.target.result
-                });
-            };
+            reader.onload = e => resolve({
+                nombre: file.name,
+                tipo: file.type,
+                data: e.target.result
+            });
+            reader.onerror = e => reject(`Error leyendo ${file.name}`);
             reader.readAsDataURL(file);
         });
     }
 
-    if (!userText && !file) return;
+    if (!userText && files.length === 0) return;
 
     actualizarActividad();
 
     // Mostrar mensaje usuario
     const userMsg = document.createElement("div");
     userMsg.className = "message user";
-    userMsg.innerHTML = `<div class="message-content">${userText}${file ? `<br><small>📎 ${file.name}</small>` : ""}</div><div class="message-icon"><img src="img/avatar.png"></div>`;
+    userMsg.innerHTML = `<div class="message-content">${userText}${files.length > 0 ? `<br><small>📎 ${files.map(f => f.name).join("<br>📎 ")}</small>` : ""}</div><div class="message-icon"><img src="img/avatar.png"></div>`;
     chat.appendChild(userMsg);
     scrollToBottom(true);
 
@@ -206,7 +212,9 @@ async function sendMessage() {
         const formData = new FormData();
         formData.append("message", userText);
         formData.append("threadId", localStorage.getItem("threadId"));
-        if (file) formData.append("file", file);
+        files.forEach(file => {
+            formData.append("files", file);
+        });
 
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 60000);
@@ -249,12 +257,15 @@ async function sendMessage() {
             const tituloDetectado = extraerTitulo(respuestaFinal) || "Requerimiento sin título";
 
             let adjuntosGuardados = [];
-
-            if (archivoTemporalGlobal) {
-                const archivoBase64 = await convertirABase64(archivoTemporalGlobal);
+            for (const file of files) {
+                const archivoBase64 = await convertirABase64(file);
                 adjuntosGuardados.push(archivoBase64);
-                archivoTemporalGlobal = null;
             }
+
+            // Ahora sí limpiar
+            removeFile();
+            
+            archivosTemporalesGlobal = [];
 
             const db = JSON.parse(localStorage.getItem(STORAGE_KEY_REQ)) || [];
             db.push({
@@ -265,6 +276,10 @@ async function sendMessage() {
                 timestamp: Date.now(),
                 contenido: htmlGenerado,
                 estado: "Pendiente",
+
+                prioridad: normalizarPrioridad(
+                    data.prioridad || extraerPrioridadTexto(respuestaFinal)
+                ),
 
                 // CAMPOS NECESARIOS PARA JIRA
                 tipoCaso: "Requerimiento",
@@ -293,6 +308,8 @@ async function sendMessage() {
         console.error("Error NOVA:", error);
     }
 }
+
+
 
 function extraerTitulo(texto) {
     if (!texto) return null;
@@ -352,6 +369,48 @@ function extraerCentroCostoTexto(texto) {
     return null;
 }
 
+function extraerPrioridadTexto(texto) {
+    if (!texto) return null;
+
+    const limpio = texto.replace(/<br\s*\/?>/gi, "\n");
+    const lineas = limpio.split("\n");
+
+    for (let i = 0; i < lineas.length; i++) {
+        const l = lineas[i].trim();
+
+        if (/prioridad/i.test(l)) {
+
+            if (l.includes(":")) {
+                const valor = l.split(":").slice(1).join(":").trim();
+                if (valor) return normalizarPrioridad(valor);
+            }
+
+            const siguiente = lineas[i + 1]?.trim();
+            if (siguiente && !/impacto/i.test(siguiente)) {
+                return normalizarPrioridad(siguiente);
+            }
+        }
+    }
+
+    return null;
+}
+function normalizarPrioridad(valor) {
+    if (!valor) return null;
+
+    const v = valor
+        .replace(/\./g, "")
+        .trim()
+        .toLowerCase();
+
+    if (v.includes("alta")) return "Alta";
+    if (v.includes("media")) return "Media";
+    if (v.includes("baja")) return "Baja";
+    if (v.includes("crit")) return "Crítica";
+
+    return valor.trim();
+}
+
+
 function convertirPlantillaAHTML(texto) {
     if (!texto) return "";
 
@@ -364,6 +423,8 @@ function convertirPlantillaAHTML(texto) {
     let html = `<div class="doc-pro-view">`;
     let enLista = false;
 
+    let tituloPrincipal = null;
+
     const cerrarLista = () => {
         if (enLista) {
             html += `</ul>`;
@@ -371,14 +432,21 @@ function convertirPlantillaAHTML(texto) {
         }
     };
 
-    lineas.forEach(linea => {
+    lineas.forEach((linea, index) => {
         let l = linea.trim();
         if (!l) return;
 
-        // TITULO PRINCIPAL
+        // 🔥 EXTRAER TITULO Y NO MOSTRARLO COMO CONTENIDO
+        if (/^t[íi]tulo del requerimiento/i.test(l)) {
+            const partes = l.split(":");
+            tituloPrincipal = partes.slice(1).join(":").trim();
+            return; // ❌ No se renderiza esta línea
+        }
+
+        // 🔥 REEMPLAZAR "PLANTILLA FINAL GENERADA" POR EL TITULO REAL
         if (/^Plantilla Final Generada/i.test(l)) {
             cerrarLista();
-            html += `<h1 class="doc-main-title">📄 ${l}</h1>`;
+            html += `<h1 class="doc-main-title">📄 ${tituloPrincipal || "Requerimiento"}</h1>`;
         }
 
         // FASES
@@ -387,9 +455,9 @@ function convertirPlantillaAHTML(texto) {
             html += `<h2 class="doc-phase">${l}</h2>`;
         }
 
-        // TITULOS IMPORTANTES (claves del documento)
+        // TITULOS IMPORTANTES
         else if (
-            /^(Tipo de gestión|Análisis de impacto|Impacto actual|Riesgos si NO|Impacto esperado|Prioridad asignada|Definición funcional|Reglas de negocio|Sistemas y fuentes|Ambientes involucrados|Criterios de aceptación|Alcance del requerimiento|Datos formales|Adjuntos asociados|Riesgos y consideraciones|Resumen ejecutivo)/i.test(l)
+            /^(Tipo de gestión|Análisis de impacto|Impacto actual|Riesgos si NO|Impacto esperado|Prioridad asignada|Definición funcional|Reglas de negocio|Sistemas y componentes involucrados|Ambientes involucrados|Criterios de aceptación|Alcance del requerimiento|Datos formales|Adjuntos asociados|Riesgos identificados|Beneficios esperados|Usuarios afectados|Área o proceso impactado|Objetivo de la solución|Descripción breve de la necesidad|Problema que se busca resolver|Descripción del proceso actual|Descripción general de la solución requerida|Exclusiones del alcance|Implicaciones si no se realiza la solución|Área técnica responsable del desarrollo|Autor del requerimiento|Centro de Costos asociado)/i.test(l)
         ) {
             cerrarLista();
             html += `<h2 class="doc-section-title">${l}</h2>`;
@@ -399,12 +467,6 @@ function convertirPlantillaAHTML(texto) {
         else if (/AS-IS|TO-BE/i.test(l)) {
             cerrarLista();
             html += `<h3 class="doc-subtitle">${l}</h3>`;
-        }
-
-        // PREGUNTAS
-        else if (/^\d+\.\s/.test(l)) {
-            cerrarLista();
-            html += `<h3 class="doc-question">${l}</h3>`;
         }
 
         // LABELS
@@ -535,7 +597,8 @@ function obtenerClaseEstado(estado) {
 }
 
 function verDetalleReq(req) {
-    localStorage.setItem("reqDetalle", JSON.stringify(req));
+    localStorage.removeItem("reqValidandoId");
+    localStorage.setItem("reqValidandoId", req.id);
     localStorage.setItem("origenNavegacion", "misRequerimientos");
     window.location.href = "resultado.html";
 }
@@ -682,6 +745,7 @@ function cargarBandejaValidacion() {
             <div class="val-card-body">
                 <div class="val-info-item">📅 <span>${req.fecha}</span></div>
                 <div class="val-info-item">👤 <span>${req.autor || "Sistema"}</span></div>
+                <div class="val-info-item">🚨 <span>${req.prioridad}</span></div>
             </div>
             <div class="val-card-footer">
                 <span class="val-badge ${obtenerClaseEstado(req.estado)}">${req.estado}</span>
@@ -726,24 +790,48 @@ function cargarRequerimientoValidacion() {
         return;
     }
 
-    // Banner si el requerimiento fue rechazado
+    // Prioridad
+    let prioridadHTML = "";
+
+    if (reqActual?.prioridad) {
+        prioridadHTML = `
+            <div class="priority-badge ${reqActual.prioridad.toLowerCase()}">
+                🚨 Prioridad: ${reqActual.prioridad}
+            </div>
+        `;
+    }
+
+    // Banner Rechazado
     let alertaMotivo = "";
+
     if (reqActual?.estado === "Rechazado" && reqActual?.comentario) {
         alertaMotivo = `
-            <div class="reject-alert" style="background: #fdf2f2; border-left: 5px solid #e74c3c; padding: 15px; margin-bottom: 20px; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
-                <h4 style="color: #e74c3c; margin: 0; font-size: 16px;">❌ Requerimiento Rechazado</h4>
+            <div class="reject-alert" style="
+                background: #fdf2f2;
+                border-left: 5px solid #e74c3c;
+                padding: 15px;
+                margin-bottom: 20px;
+                border-radius: 4px;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            ">
+                <h4 style="color: #e74c3c; margin: 0; font-size: 16px;">
+                    ❌ Requerimiento Rechazado
+                </h4>
                 <p style="margin: 8px 0 0; color: #555; font-size: 14px; line-height: 1.4;">
                     <strong>Motivo del rechazo:</strong> ${reqActual.comentario}
                 </p>
-            </div>`;
+            </div>
+        `;
     }
 
-    contenedor.innerHTML = alertaMotivo + reqHTML;
+    contenedor.innerHTML = alertaMotivo + prioridadHTML + reqHTML;
 
-    // Mostrar adjuntos si existen
+    // Adjuntos
     if (reqActual?.adjuntos?.length > 0) {
         const adjDiv = document.createElement("div");
+        adjDiv.className = "adjuntos-validacion";
         adjDiv.innerHTML = "<h3>📎 Adjuntos</h3>";
+
         reqActual.adjuntos.forEach(adj => {
             const link = document.createElement("a");
             link.href = adj.data;
@@ -752,8 +840,10 @@ function cargarRequerimientoValidacion() {
             link.style.display = "block";
             adjDiv.appendChild(link);
         });
+
         contenedor.appendChild(adjDiv);
     }
+
 
     const validaciones = JSON.parse(localStorage.getItem("validaciones")) || {};
     const estadoChecksGuardado = validaciones[reqId];
@@ -835,7 +925,11 @@ async function enviarAJira(req) {
 
                 customfield_10120: req.centro_costo || null,
 
-                adjuntos: req.adjuntos || []
+                adjuntos: (req.adjuntos || []).map(adj => ({
+                    nombre: adj.nombre,
+                    tipo: adj.tipo,
+                    base64: adj.data.split(",")[1]
+                }))
 
             })
         });
@@ -1133,18 +1227,37 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     // Previsualización de Adjuntos (Global)
+    function renderFilePreview() {
+        const filePreview = document.getElementById("filePreview");
+        if (!filePreview) return;
+
+        filePreview.innerHTML = "";
+
+        archivosTemporalesGlobal.forEach((file, index) => {
+            const chip = document.createElement("div");
+            chip.classList.add("file-chip");
+            chip.innerHTML = `
+            📎 ${file.name} 
+            <button onclick="removeFile(${index})">✖</button>
+        `;
+            filePreview.appendChild(chip);
+        });
+    }
+
     const fileInput = document.getElementById("fileInput");
     const filePreview = document.getElementById("filePreview");
+
     if (fileInput && filePreview) {
         fileInput.addEventListener("change", function () {
-            filePreview.innerHTML = "";
-            if (this.files.length > 0) {
-                const file = this.files[0];
-                const chip = document.createElement("div");
-                chip.classList.add("file-chip");
-                chip.innerHTML = `📎 ${file.name} <button onclick="removeFile()">✖</button>`;
-                filePreview.appendChild(chip);
+
+            for (let i = 0; i < this.files.length; i++) {
+                archivosTemporalesGlobal.push(this.files[i]);
             }
+
+            renderFilePreview();
+
+            // Permite volver a subir el mismo archivo
+            fileInput.value = "";
         });
     }
 
@@ -1191,12 +1304,15 @@ document.addEventListener("DOMContentLoaded", () => {
         const reqIdValidando = localStorage.getItem("reqValidandoId");
         const db = obtenerRequerimientos();
 
-        if (reqIdValidando) {
+        if (reqIdValidando && localStorage.getItem("origenNavegacion") === "validacion") {
             reqDetalle = db.find(r => r.id === reqIdValidando) || null;
             // Limpiamos reqDetalle viejo
             localStorage.removeItem("reqDetalle");
         } else if (localStorage.getItem("reqDetalle")) {
-            reqDetalle = JSON.parse(localStorage.getItem("reqDetalle"));
+            const temp = JSON.parse(localStorage.getItem("reqDetalle"));
+
+            // 🔥 Buscar siempre el requerimiento real desde la base
+            reqDetalle = db.find(r => r.id === temp.id) || temp;
         }
 
         if (!reqDetalle) {
