@@ -1275,6 +1275,22 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
+    // Editar Requerimiento
+
+    document.addEventListener("DOMContentLoaded", () => {
+        const contenidoHTML = localStorage.getItem("reqTemporal");
+        if (contenidoHTML) {
+            const tempDiv = document.createElement("div");
+            tempDiv.innerHTML = contenidoHTML;
+
+            let textoPlano = tempDiv.innerText || tempDiv.textContent;
+
+            document.getElementById("editorContenido").value = textoPlano.trim();
+        }
+    });
+
+
+
     // Previsualización de Adjuntos (Global)
     function renderFilePreview() {
 
