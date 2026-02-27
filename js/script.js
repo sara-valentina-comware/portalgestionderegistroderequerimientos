@@ -452,14 +452,16 @@ function normalizarPrioridad(valor) {
 function convertirPlantillaAHTML(texto) {
     if (!texto) return "";
 
-    // 🔥 Extraer título principal
-    const tituloPrincipal = extraerTitulo(texto) || "Requerimiento";
-
-    let textoLimpio = texto
+    // Limpieza inicial
+    const lineas = texto
         .replace(/<br\s*\/?>/gi, "\n")
-        .replace(/\*/g, "");
+        .replace(/\*/g, "")
+        .split("\n")
+        .map(l => l.trim())
+        .filter(l => l !== "" && !/^Plantilla Final Generada/i.test(l));
 
-    const lineas = textoLimpio.split("\n");
+    // 🔥 El título es la primera línea válida
+    const tituloPrincipal = lineas[0] || "Requerimiento";
 
     let html = `
         <div class="doc-pro-view">
@@ -475,46 +477,55 @@ function convertirPlantillaAHTML(texto) {
         }
     };
 
-    lineas.forEach((linea) => {
-        let l = linea.trim();
-        if (!l) return;
+    // 🎯 H2 EXACTOS
+    const titulosSecundarios = [
+        "Descripción breve de la necesidad:",
+        "Problema que se busca resolver:",
+        "Área o proceso impactado:",
+        "Objetivo de la solución:",
+        "Descripción del proceso actual (AS-IS):",
+        "Descripción general de la solución requerida (TO-BE):",
+        "Alcance del requerimiento (incluye):",
+        "Exclusiones del alcance (no incluye, salvo definición posterior):",
+        "Riesgos identificados (a nivel documental):",
+        "Criterios de aceptación (alto nivel):",
+        "Área técnica responsable del desarrollo:",
+        "Autor del requerimiento:",
+        "Centro de Costos asociado:",
+        "Adjuntos asociados al requerimiento:"
+    ];
 
-        // ❌ No mostrar línea del título dentro del contenido
-        if (/^t[íi]tulo del requerimiento/i.test(l)) {
-            return;
-        }
+    // 🎯 H3 EXACTOS
+    const subtitulos = [
+        "Tipo de gestión:",
+        "Tipo de solicitud:",
+        "Usuarios afectados:",
+        "Principales fallas o dolores del proceso actual:",
+        "Sistemas y componentes involucrados:",
+        "Reglas o políticas que la solución debe cumplir:",
+        "Aprobaciones y validaciones requeridas dentro del flujo:",
+        "Implicaciones si no se realiza la solución:",
+        "Ambiente(s) impactado(s):"
+    ];
 
-        // ==============================
-        // 🎯 TITULOS SECUNDARIOS (H2)
-        // ==============================
-        else if (
-            /^(Descripción breve de la necesidad|Problema que se busca resolver|Área o proceso impactado|Objetivo de la solución|Descripción del proceso actual \(AS-IS\)|Descripción general de la solución requerida \(TO-BE\)|Alcance del requerimiento \(incluye\)|Exclusiones del alcance|Riesgos identificados|Criterios de aceptación|Área técnica responsable del desarrollo|Autor del requerimiento|Centro de Costos asociado|Adjuntos asociados al requerimiento)/i.test(l)
-        ) {
+    lineas.forEach((l, index) => {
+
+        // ❌ Saltar primera línea (ya usada como H1)
+        if (index === 0) return;
+
+        // ❌ Evitar que el título vuelva a aparecer
+        if (l === tituloPrincipal) return;
+
+        if (titulosSecundarios.includes(l)) {
             cerrarLista();
             html += `<h2 class="doc-section-title">${l}</h2>`;
         }
 
-        // ==============================
-        // 🎯 SUBTITULOS (H3)
-        // ==============================
-        else if (
-            /^(Tipo de gestión|Tipo de gestión:|Tipo de solicitud|Tipo de solicitud:|Usuarios afectados|Principales fallas o dolores del proceso actual|Sistemas y componentes involucrados|Reglas o políticas que la solución debe cumplir|Aprobaciones y validaciones requeridas dentro del flujo|Implicaciones si no se realiza la solución|Ambiente\(s\) impactado\(s\))/i.test(l)
-        ) {
+        else if (subtitulos.includes(l)) {
             cerrarLista();
             html += `<h3 class="doc-subtitle">${l}</h3>`;
         }
 
-        // ==============================
-        // 🔹 LABELS (terminan en :)
-        // ==============================
-        else if (l.endsWith(":")) {
-            cerrarLista();
-            html += `<h4 class="doc-label">${l}</h4>`;
-        }
-
-        // ==============================
-        // 🔹 BULLETS
-        // ==============================
         else if (/^[-•]/.test(l)) {
             if (!enLista) {
                 html += `<ul class="doc-list">`;
@@ -523,9 +534,6 @@ function convertirPlantillaAHTML(texto) {
             html += `<li>${l.replace(/^[-•]\s*/, "")}</li>`;
         }
 
-        // ==============================
-        // 🔹 TEXTO NORMAL
-        // ==============================
         else {
             cerrarLista();
             html += `<p class="doc-paragraph">${l}</p>`;
@@ -538,7 +546,6 @@ function convertirPlantillaAHTML(texto) {
 
     return html;
 }
-
 /* =========================
    MIS REQUERIMIENTOS
 ========================= */
@@ -1271,24 +1278,24 @@ document.addEventListener("DOMContentLoaded", () => {
     // Previsualización de Adjuntos (Global)
     function renderFilePreview() {
 
-    const filePreview = document.getElementById("filePreview");
-    if (!filePreview) return;
+        const filePreview = document.getElementById("filePreview");
+        if (!filePreview) return;
 
-    filePreview.innerHTML = "";
+        filePreview.innerHTML = "";
 
-    archivosTemporalesGlobal.forEach((file, index) => {
+        archivosTemporalesGlobal.forEach((file, index) => {
 
-        const fileItem = document.createElement("div");
-        fileItem.className = "file-item";
+            const fileItem = document.createElement("div");
+            fileItem.className = "file-item";
 
-        fileItem.innerHTML = `
+            fileItem.innerHTML = `
             📎 ${file.name}
             <button onclick="removeFile(${index})">❌</button>
         `;
 
-        filePreview.appendChild(fileItem);
-    });
-}
+            filePreview.appendChild(fileItem);
+        });
+    }
 
     const fileInput = document.getElementById("fileInput");
     const filePreview = document.getElementById("filePreview");
