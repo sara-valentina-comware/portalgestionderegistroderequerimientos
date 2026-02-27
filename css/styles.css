@@ -213,11 +213,13 @@ body {
     transition: all 0.3s ease;
     cursor: pointer;
 }
+
 .perfil-btn img:hover {
     transform: scale(1.12);
     border-color: #fffa65;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
 }
+
 .perfil-btn img:active {
     transform: scale(0.95);
 }
@@ -491,16 +493,19 @@ body {
     border-radius: 10px;
 }
 
+#fileInput {
+    display: none;
+}
+
 .file-preview {
     display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-bottom: 6px;
     flex-wrap: wrap;
+    gap: 8px;
 }
 
 .file-chip {
-    background: #e9eef5;
+    background: #e8f3ff;
+    color: #1d72b8;
     padding: 6px 10px;
     border-radius: 20px;
     font-size: 13px;
@@ -513,7 +518,8 @@ body {
     background: none;
     border: none;
     cursor: pointer;
-    font-size: 14px;
+    font-size: 12px;
+    color: #d9534f;
 }
 
 @keyframes fadeIn {
@@ -846,6 +852,30 @@ body {
     text-transform: uppercase;
 }
 
+.priority-badge {
+    display: inline-block;
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 15px;
+}
+
+.priority-badge.alta {
+    background: #fdecea;
+    color: #e74c3c;
+}
+
+.priority-badge.media {
+    background: #fff4e5;
+    color: #f39c12;
+}
+
+.priority-badge.baja {
+    background: #e8f8f5;
+    color: #16a085;
+}
+
 /* RECHAZO */
 .reject-reason-container {
     margin-top: 20px;
@@ -1060,18 +1090,12 @@ textarea#editorContenido {
     background: #ffffff;
     border-radius: 14px;
     padding: 30px 35px;
-    box-shadow: 0 8px 30px rgba(0,0,0,0.08);
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.08);
     font-family: "Segoe UI", sans-serif;
     line-height: 1.6;
     color: #2c3e50;
     animation: fadeInDoc 0.4s ease;
 }
-
-@keyframes fadeInDoc {
-    from { opacity: 0; transform: translateY(10px); }
-    to { opacity: 1; transform: translateY(0); }
-}
-
 .doc-main-title {
     font-size: 26px;
     margin-bottom: 25px;
@@ -1088,23 +1112,30 @@ textarea#editorContenido {
     border-left: 4px solid #2282bf;
     padding-left: 10px;
 }
+
 .doc-subtitle {
     font-size: 15px;
     margin-top: 18px;
-    color: #34495e;
+    color: #1f4e79;
     font-weight: 600;
 }
 
 .doc-list {
-    margin: 8px 0 12px 18px;
+    margin: 8px 0 12px 20px;
     padding-left: 10px;
 }
 
 .doc-list li {
     font-size: 14px;
-    margin-bottom: 4px;
+    margin-bottom: 6px;
     color: #333;
 }
+
+.doc-list li::marker {
+    color: #e53935;
+    font-size: 16px;
+}
+
 .doc-phase {
     font-size: 17px;
     margin-top: 24px;
@@ -1129,7 +1160,7 @@ textarea#editorContenido {
 }
 
 .doc-paragraph {
-    font-size: 14px;
+    font-size: 15px;
     margin: 6px 0;
     color: #444;
 }
