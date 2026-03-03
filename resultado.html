@@ -44,20 +44,29 @@
 
         <section class="result-card">
 
-            <div class="status-badge success">Listo para aprobación</div>
+            <div class="card-top-bar">
+                <div class="status-badge success">
+                    Listo para aprobación
+                </div>
+
+                <button class="btn-icon-volver top-volver" onclick="irAtrasSegunRol()" title="Volver">
+                    <img src="img/anterior.png" class="img-volver" alt="Volver">
+                </button>
+            </div>
 
             <div class="document-preview" id="resultadoContenido">
                 Cargando documento técnico...
             </div>
 
-            <div class="actions-buttons">
-                <button class="btn-icon-volver" onclick="irAtrasSegunRol()" title="Volver">
-                    <img src="img/anterior.png" class="img-volver" alt="Volver">
-                </button>
+            <div id="contenedorAdjuntos" class="adjuntos-seccion">
+                <h3>Archivos Adjuntos</h3>
+                <div id="listaAdjuntos" class="lista-adjuntos-grid">
+                </div>
+            </div>
 
+            <div class="actions-buttons">
                 <div class="buttons-right">
                     <button class="btn-pdf" onclick="descargarPDF()">📥 Descargar</button>
-                    <button id="btnEnviarJira" class="btn-primary">🚀 Aprobar y Enviar a JIRA</button>
                 </div>
             </div>
 

@@ -1,58 +1,155 @@
-const API_URL = "http://localhost:3000";
-const JIRA_WEBHOOK_URL = "https://n8n.comware.com.co/webhook-test/portal/jira";
-const NOVA_URL = "https://n8n.comware.com.co/webhook/chat-portalgestionderegistroderequerimientos";
-const STORAGE_KEY_REQ = "requerimientos";
+const API_URL = "http://127.0.0.1:3000";
+const NOVA_URL = "http://127.0.0.1:3000/api/nova";
+const JIRA_BASE_URL = "https://comwaredev.atlassian.net";
+const JIRA_PROJECT_KEY = "PIA";
 const TIEMPO_EXPIRACION = 10 * 60 * 1000;
 let archivosTemporalesGlobal = [];
+
+/* =========================
+   HELPERS API — REQUERIMIENTOS
+========================= */
+async function obtenerRequerimientos(vista = "mis") {
+    const usuario = localStorage.getItem("usuarioLogueado");
+    const rol = localStorage.getItem("rol");
+
+    let queryParams = `rol=${encodeURIComponent(rol)}&vista=${vista}`;
+
+    if (vista === "mis") {
+        queryParams += `&usuario=${encodeURIComponent(usuario)}`;
+    } else if (rol === "manager") {
+        queryParams += `&vista=todos`;
+    }
+
+    try {
+        const resp = await fetch(`${API_URL}/requerimientos?${queryParams}`);
+        const data = await resp.json();
+        return data.success ? data.data : [];
+    } catch (error) {
+        console.error("Error obteniendo requerimientos:", error);
+        return [];
+    }
+}
+
+async function obtenerRequerimientoPorId(id) {
+    try {
+        const resp = await fetch(`${API_URL}/requerimientos/${id}`);
+        const data = await resp.json();
+        return data.success ? data.data : null;
+    } catch (error) {
+        console.error("Error obteniendo requerimiento:", error);
+        return null;
+    }
+}
+
+async function actualizarRequerimiento(id, campos) {
+    try {
+        const resp = await fetch(`${API_URL}/requerimientos/${id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(campos)
+        });
+        return (await resp.json()).success;
+    } catch (error) {
+        console.error("Error actualizando requerimiento:", error);
+        return false;
+    }
+}
+
+async function guardarValidacion(id, po, qa) {
+    try {
+        const response = await fetch(
+            `http://localhost:3000/requerimientos/${id}/validacion`,
+            {
+                method: "PATCH",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    rol: "admin",
+                    po,
+                    qa
+                })
+            }
+        );
+
+        const data = await response.json();
+
+        if (data.success) {
+            await cargarRequerimientos();
+        }
+
+    } catch (error) {
+        console.error(error);
+    }
+}
+
+
+/* =========================
+   MANEJO DE ADJUNTOS
+========================= */
+document.addEventListener("DOMContentLoaded", function () {
+    const fileInput = document.getElementById("fileInput");
+    if (!fileInput) return;
+    fileInput.addEventListener("change", function () {
+        for (let i = 0; i < this.files.length; i++) {
+            archivosTemporalesGlobal.push(this.files[i]);
+        }
+        renderFilePreview();
+        this.value = "";
+    });
+});
 
 function generarThreadId() {
     return "thread_" + Date.now();
 }
 
-function scrollToBottom(force = false) {
+function scrollToBottom() {
     const chat = document.getElementById("chatMessages");
     if (!chat) return;
 
-    const isNearBottom = chat.scrollHeight - chat.scrollTop - chat.clientHeight < 80;
-
-    if (force || isNearBottom) {
-        requestAnimationFrame(() => {
-            chat.scrollTop = chat.scrollHeight;
-        });
-    }
+    setTimeout(() => {
+        chat.scrollTop = chat.scrollHeight;
+    }, 50);
 }
 
 function formatMessage(text) {
     if (!text) return "";
-
     let formatted = text
         .replace(/hola/gi, "👋 Hola")
-        .replace(/gracias/gi, "🙏 Gracias")
-
+        .replace(/gracias/gi, "🙏 Gracias");
     return formatted.replace(/\n/g, "<br>");
 }
 
 function removeFile(index = null) {
     const fileInput = document.getElementById("fileInput");
     const filePreview = document.getElementById("filePreview");
-
     if (index === null) {
-        // limpiar todo
         archivosTemporalesGlobal = [];
         if (fileInput) fileInput.value = "";
         if (filePreview) filePreview.innerHTML = "";
     } else {
-        // eliminar uno específico
         archivosTemporalesGlobal.splice(index, 1);
         renderFilePreview();
     }
 }
 
+function renderFilePreview() {
+    const filePreview = document.getElementById("filePreview");
+    if (!filePreview) return;
+    filePreview.innerHTML = "";
+    archivosTemporalesGlobal.forEach((file, index) => {
+        const fileItem = document.createElement("div");
+        fileItem.className = "file-item";
+        fileItem.innerHTML = `📎 ${file.name} <button onclick="removeFile(${index})">❌</button>`;
+        filePreview.appendChild(fileItem);
+    });
+}
+
+
 /* =========================
    LOGIN / LOGOUT
 ========================= */
 async function login() {
-    // Convertimos el usuario a minúsculas
     const usuarioInput = document.getElementById("usuario")?.value.trim().toLowerCase();
     const password = document.getElementById("password")?.value.trim();
 
@@ -72,12 +169,10 @@ async function login() {
         console.log("Backend:", data);
 
         if (data.success) {
-            // Guardamos el usuario en minúsculas también para consistencia
             localStorage.setItem("usuarioLogueado", data.usuario.toLowerCase());
             localStorage.setItem("rol", data.rol);
             localStorage.setItem("ultimaActividad", Date.now());
             localStorage.setItem("threadId", generarThreadId());
-
             window.location.href = "inicio.html";
         } else {
             alert("Usuario o contraseña incorrectos");
@@ -93,7 +188,6 @@ function logout() {
     localStorage.removeItem("rol");
     localStorage.removeItem("ultimaActividad");
     localStorage.removeItem("threadId");
-
     window.location.href = "index.html";
 }
 
@@ -101,20 +195,10 @@ function logout() {
 /* =========================
    NAVEGACIÓN
 ========================= */
-function irNuevo() {
-    window.location.href = "nuevo.html";
-}
-
-function irMisRequerimientos() {
-    window.location.href = "misRequerimientos.html";
-}
-
-function irValidacion() {
-    window.location.href = "validacion.html";
-}
-function irPerfil() {
-    window.location.href = "perfil.html";
-}
+function irNuevo() { window.location.href = "nuevo.html"; }
+function irMisRequerimientos() { window.location.href = "misRequerimientos.html"; }
+function irValidacion() { window.location.href = "validacion.html"; }
+function irPerfil() { window.location.href = "perfil.html"; }
 
 function irAtrasSegunRol() {
     const rol = localStorage.getItem("rol");
@@ -133,6 +217,7 @@ function irAtrasSegunRol() {
     }
 }
 
+
 /* =========================
    CONTROL DE INACTIVIDAD
 ========================= */
@@ -144,7 +229,6 @@ function verificarInactividad() {
     const ultimaActividad = localStorage.getItem("ultimaActividad");
     const usuario = localStorage.getItem("usuarioLogueado");
     if (!usuario || !ultimaActividad) return;
-
     const tiempoInactivo = Date.now() - parseInt(ultimaActividad);
     if (tiempoInactivo > TIEMPO_EXPIRACION) cerrarSesionPorInactividad();
 }
@@ -154,13 +238,13 @@ function cerrarSesionPorInactividad() {
     localStorage.removeItem("rol");
     localStorage.removeItem("ultimaActividad");
     localStorage.removeItem("threadId");
-
-    alert("Sesión cerrada por inactividad⏳");
+    alert("Sesión cerrada por inactividad ⏳");
     window.location.href = "index.html";
 }
 
 ["click", "mousemove", "keydown", "scroll", "touchstart"]
     .forEach(evento => document.addEventListener(evento, actualizarActividad));
+
 
 /* =========================
    CHATBOT NOVA
@@ -168,382 +252,281 @@ function cerrarSesionPorInactividad() {
 async function sendMessage() {
     const input = document.getElementById("userInput");
     const chat = document.getElementById("chatMessages");
-    const fileInput = document.getElementById("fileInput");
 
     if (!input || !chat) return;
+
     const userText = input.value.trim();
     const files = [...archivosTemporalesGlobal];
 
-    function convertirABase64(file) {
-        return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = e => resolve({
-                nombre: file.name,
-                tipo: file.type,
-                data: e.target.result
-            });
-            reader.onerror = e => reject(`Error leyendo ${file.name}`);
-            reader.readAsDataURL(file);
-        });
+    if (!userText.trim()) {
+        alert("Escribe un mensaje antes de enviar.");
+        return;
     }
-
-    if (!userText && files.length === 0) return;
 
     actualizarActividad();
 
     // Mostrar mensaje usuario
     const userMsg = document.createElement("div");
     userMsg.className = "message user";
-    userMsg.innerHTML = `<div class="message-content">${userText}${files.length > 0 ? `<br><small>📎 ${files.map(f => f.name).join("<br>📎 ")}</small>` : ""}</div><div class="message-icon"><img src="img/avatar.png"></div>`;
+    userMsg.innerHTML = `
+        <div class="message-content">
+            ${userText}
+            ${files.length > 0 ? `<br><small>📎 ${files.map(f => f.name).join("<br>📎 ")}</small>` : ""}
+        </div>
+        <div class="message-icon"><img src="img/avatar.png"></div>
+    `;
     chat.appendChild(userMsg);
-    scrollToBottom(true);
+    scrollToBottom();
 
     input.value = "";
-    removeFile();
 
-    // Mensaje "NOVA escribiendo"
     const typingMsg = document.createElement("div");
     typingMsg.className = "message bot typing";
-    typingMsg.innerHTML = `<div class="message-icon"><img src="img/bot.png"></div><div class="message-content">NOVA está escribiendo...</div>`;
+    typingMsg.innerHTML = `
+        <div class="message-icon"><img src="img/bot.png"></div>
+        <div class="message-content">NOVA está escribiendo...</div>
+    `;
     chat.appendChild(typingMsg);
-    scrollToBottom(true);
 
     try {
+
         const formData = new FormData();
         formData.append("message", userText);
         formData.append("threadId", localStorage.getItem("threadId"));
+        formData.append("channel", "web");
+
         files.forEach(file => {
             formData.append("files", file);
         });
 
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 60000);
-
         const response = await fetch(NOVA_URL, {
             method: "POST",
-            body: formData,
-            signal: controller.signal
+            body: formData
         });
 
-        clearTimeout(timeout);
+        if (!response.ok) throw new Error("Error servidor");
 
-        if (!response.ok) throw new Error("Respuesta inválida del servidor");
+        const data = await response.json();
+        const respuestaFinal = typeof data.reply === "string"
+            ? data.reply.trim()
+            : String(data.reply || "");
 
-        const text = await response.text();
-        let data;
-        try {
-            data = JSON.parse(text);
-        } catch (error) {
-            typingMsg.remove();
-            const errorMsg = document.createElement("div");
-            errorMsg.className = "message bot";
-            errorMsg.innerHTML = `
-                <div class="message-icon"><img src="img/bot.png"></div>
-                <div class="message-content">
-                    ⚠️ NOVA no respondió. Verifica el webhook o intenta nuevamente.
-                </div>
-            `;
-            chat.appendChild(errorMsg);
-            return;
-        }
-
-        const respuestaFinal = (data.reply || "").trim();
-
-        // Detectar Plantilla Final Generada
         if (respuestaFinal.toLowerCase().includes("plantilla final generada")) {
 
             const usuario = localStorage.getItem("usuarioLogueado");
 
-            const htmlGenerado = convertirPlantillaAHTML(respuestaFinal);
-            const tituloDetectado = extraerTitulo(respuestaFinal) || "Requerimiento sin título";
-
-            let adjuntosGuardados = [];
-            for (const file of files) {
-                const archivoBase64 = await convertirABase64(file);
-                adjuntosGuardados.push(archivoBase64);
-            }
-
-            removeFile();
-            archivosTemporalesGlobal = [];
-
-            // 🔢 GENERAR ID CORTO
-            const db = JSON.parse(localStorage.getItem(STORAGE_KEY_REQ)) || [];
-
-            let siguienteNumero = 1;
-
-            if (db.length > 0) {
-                const numeros = db.map(r => {
-                    const match = r.id?.match(/\d+/);
-                    return match ? parseInt(match[0]) : 0;
-                });
-
-                siguienteNumero = Math.max(...numeros) + 1;
-            }
-
-            const idReq = "REQ_" + String(siguienteNumero).padStart(4, "0");
-
-            db.push({
-                id: idReq,
-                titulo: tituloDetectado,
+            const nuevoReq = {
+                titulo: extraerTitulo(respuestaFinal) || "Requerimiento sin título",
                 autor: usuario,
                 fecha: new Date().toLocaleString(),
-                timestamp: Date.now(),
-                contenido: htmlGenerado,
+                timestamp_ms: Date.now(),
+                contenido: convertirPlantillaAHTML(respuestaFinal),
                 estado: "Pendiente",
-
                 prioridad: normalizarPrioridad(
-                    data.prioridad || extraerPrioridadTexto(respuestaFinal)
+                    extraerPrioridadTexto(respuestaFinal)
                 ),
+                tipo_caso: "Requerimiento",
+                centro_costo: extraerCentroCostoTexto(respuestaFinal),
+                adjuntos: data.adjuntos || [],
+                threadId: localStorage.getItem("threadId")
+            };
 
-                tipoCaso: "Requerimiento",
-                fechaSolucion: data.fechaSolucion || null,
-                encargadoId: data.encargadoId || null,
-                centro_costo: data.customfield_10120
-                    || (data.customFields && data.customFields["10120"])
-                    || extraerCentroCostoTexto(respuestaFinal)
-                    || null,
-
-                adjuntos: adjuntosGuardados
+            const guardar = await fetch(`${API_URL}/requerimientos`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(nuevoReq)
             });
 
-            localStorage.setItem(STORAGE_KEY_REQ, JSON.stringify(db));
+            const guardado = await guardar.json();
+
+            if (!guardado.success) {
+                alert("Error guardando requerimiento en BD");
+                return;
+            }
+
+            archivosTemporalesGlobal = [];
+            removeFile();
         }
 
-        // Mostrar respuesta NOVA
         typingMsg.remove();
+        scrollToBottom();
+
         const botMsg = document.createElement("div");
         botMsg.className = "message bot";
-        botMsg.innerHTML = `<div class="message-icon"><img src="img/bot.png"></div><div class="message-content">${formatMessage(respuestaFinal)}</div>`;
+        botMsg.innerHTML = `
+            <div class="message-icon"><img src="img/bot.png"></div>
+            <div class="message-content">${formatMessage(respuestaFinal)}</div>
+        `;
         chat.appendChild(botMsg);
-        scrollToBottom(true);
+        scrollToBottom();
 
     } catch (error) {
         typingMsg.remove();
-        console.error("Error NOVA:", error);
+        scrollToBottom();
+        console.error("ERROR REAL:", error);
+        alert("Error real: " + error.message);
     }
 }
 
 
-
+/* =========================
+   EXTRACCIÓN DE CAMPOS
+========================= */
 function extraerTitulo(texto) {
     if (!texto) return null;
-
-    // Convertir <br> en saltos de línea
     const limpio = texto.replace(/<br\s*\/?>/gi, "\n");
-
     const lineas = limpio.split("\n");
 
     for (let i = 0; i < lineas.length; i++) {
         const l = lineas[i].trim();
-
-        // Detectar múltiples formas válidas
         if (/(nombre\s+del\s+(servicio|requerimiento)|t[íi]tulo|servicio)/i.test(l)) {
-
-            // Caso: "Titulo: algo"
             if (l.includes(":")) {
-                const partes = l.split(":");
-                const posible = partes.slice(1).join(":").trim();
-                if (posible && posible.length > 3) {
-                    return posible;
-                }
+                const posible = l.split(":").slice(1).join(":").trim();
+                if (posible && posible.length > 3) return posible;
             }
-
-            // Caso: título en la siguiente línea
             const siguiente = lineas[i + 1]?.trim();
-            if (siguiente && siguiente.length > 3 && !/^-+$/.test(siguiente)) {
-                return siguiente;
-            }
+            if (siguiente && siguiente.length > 3 && !/^-+$/.test(siguiente)) return siguiente;
         }
     }
-
     return null;
 }
 
 function extraerCentroCostoTexto(texto) {
     if (!texto) return null;
-
     const lineas = texto.replace(/<br\s*\/?>/gi, "\n").split("\n");
-
     for (let i = 0; i < lineas.length; i++) {
         let l = lineas[i].trim();
-
         if (/centro de costos?/i.test(l)) {
-
             const partes = l.split(":");
-            if (partes.length > 1 && partes[1].trim()) {
-                return partes[1].trim();
-            }
-
+            if (partes.length > 1 && partes[1].trim()) return partes[1].trim();
             for (let j = i + 1; j < lineas.length; j++) {
                 if (lineas[j].trim()) return lineas[j].trim();
             }
         }
     }
-
     return null;
 }
 
 function extraerPrioridadTexto(texto) {
     if (!texto) return null;
-
     const limpio = texto.replace(/<br\s*\/?>/gi, "\n");
     const lineas = limpio.split("\n");
-
     for (let i = 0; i < lineas.length; i++) {
         const l = lineas[i].trim();
-
         if (/prioridad/i.test(l)) {
-
             if (l.includes(":")) {
                 const valor = l.split(":").slice(1).join(":").trim();
                 if (valor) return normalizarPrioridad(valor);
             }
-
             const siguiente = lineas[i + 1]?.trim();
-            if (siguiente && !/impacto/i.test(siguiente)) {
-                return normalizarPrioridad(siguiente);
-            }
+            if (siguiente && !/impacto/i.test(siguiente)) return normalizarPrioridad(siguiente);
         }
     }
-
     return null;
 }
+
 function normalizarPrioridad(valor) {
     if (!valor) return null;
-
-    const v = valor
-        .replace(/\./g, "")
-        .trim()
-        .toLowerCase();
-
+    const v = valor.replace(/\./g, "").trim().toLowerCase();
     if (v.includes("alta")) return "Alta";
     if (v.includes("media")) return "Media";
     if (v.includes("baja")) return "Baja";
     if (v.includes("crit")) return "Crítica";
-
     return valor.trim();
 }
 
-
+/* =========================
+   CONVERTIR PLANTILLA A HTML
+========================= */
 function convertirPlantillaAHTML(texto) {
     if (!texto) return "";
 
-    // 🔥 Extraer título principal
-    const tituloPrincipal = extraerTitulo(texto) || "Requerimiento";
-
-    let textoLimpio = texto
+    const lineas = texto
         .replace(/<br\s*\/?>/gi, "\n")
-        .replace(/\*/g, "");
+        .replace(/\*/g, "")
+        .split("\n")
+        .map(l => l.trim())
+        .filter(l => l !== "" && !/^Plantilla Final Generada/i.test(l));
 
-    const lineas = textoLimpio.split("\n");
-
-    let html = `
-        <div class="doc-pro-view">
-            <h1 class="doc-main-title">${tituloPrincipal}</h1>
-    `;
-
+    const tituloPrincipal = lineas[0] || "Requerimiento";
+    let html = `<div class="doc-pro-view"><h1 class="doc-main-title">${tituloPrincipal}</h1>`;
     let enLista = false;
 
     const cerrarLista = () => {
-        if (enLista) {
-            html += `</ul>`;
-            enLista = false;
-        }
+        if (enLista) { html += `</ul>`; enLista = false; }
     };
 
-    lineas.forEach((linea) => {
-        let l = linea.trim();
-        if (!l) return;
+    const titulosSecundarios = [
+        "Descripción breve de la necesidad:",
+        "Problema que se busca resolver:",
+        "Área o proceso impactado:",
+        "Objetivo de la solución:",
+        "Descripción del proceso actual (AS-IS):",
+        "Descripción general de la solución requerida (TO-BE):",
+        "Alcance del requerimiento (incluye):",
+        "Exclusiones del alcance (no incluye, salvo definición posterior):",
+        "Riesgos identificados (a nivel documental):",
+        "Criterios de aceptación (alto nivel):",
+        "Área técnica responsable del desarrollo:",
+        "Autor del requerimiento:",
+        "Centro de Costos asociado:",
+        "Adjuntos asociados al requerimiento:"
+    ];
 
-        // ❌ No mostrar línea del título dentro del contenido
-        if (/^t[íi]tulo del requerimiento/i.test(l)) {
-            return;
-        }
+    const subtitulos = [
+        "Tipo de gestión:",
+        "Tipo de solicitud:",
+        "Usuarios afectados:",
+        "Principales fallas o dolores del proceso actual:",
+        "Sistemas y componentes involucrados:",
+        "Reglas o políticas que la solución debe cumplir:",
+        "Aprobaciones y validaciones requeridas dentro del flujo:",
+        "Implicaciones si no se realiza la solución:",
+        "Ambiente(s) impactado(s):"
+    ];
 
-        // ==============================
-        // 🎯 TITULOS SECUNDARIOS (H2)
-        // ==============================
-        else if (
-            /^(Descripción breve de la necesidad|Problema que se busca resolver|Área o proceso impactado|Objetivo de la solución|Descripción del proceso actual \(AS-IS\)|Descripción general de la solución requerida \(TO-BE\)|Alcance del requerimiento \(incluye\)|Exclusiones del alcance|Riesgos identificados|Criterios de aceptación|Área técnica responsable del desarrollo|Autor del requerimiento|Centro de Costos asociado|Adjuntos asociados al requerimiento)/i.test(l)
-        ) {
+    lineas.forEach((l, index) => {
+        if (index === 0) return;
+        if (l === tituloPrincipal) return;
+
+        if (titulosSecundarios.includes(l)) {
             cerrarLista();
             html += `<h2 class="doc-section-title">${l}</h2>`;
-        }
-
-        // ==============================
-        // 🎯 SUBTITULOS (H3)
-        // ==============================
-        else if (
-            /^(Tipo de gestión|Tipo de gestión:|Tipo de solicitud|Tipo de solicitud:|Usuarios afectados|Principales fallas o dolores del proceso actual|Sistemas y componentes involucrados|Reglas o políticas que la solución debe cumplir|Aprobaciones y validaciones requeridas dentro del flujo|Implicaciones si no se realiza la solución|Ambiente\(s\) impactado\(s\))/i.test(l)
-        ) {
+        } else if (subtitulos.includes(l)) {
             cerrarLista();
             html += `<h3 class="doc-subtitle">${l}</h3>`;
-        }
-
-        // ==============================
-        // 🔹 LABELS (terminan en :)
-        // ==============================
-        else if (l.endsWith(":")) {
-            cerrarLista();
-            html += `<h4 class="doc-label">${l}</h4>`;
-        }
-
-        // ==============================
-        // 🔹 BULLETS
-        // ==============================
-        else if (/^[-•]/.test(l)) {
-            if (!enLista) {
-                html += `<ul class="doc-list">`;
-                enLista = true;
-            }
+        } else if (/^[-•]/.test(l)) {
+            if (!enLista) { html += `<ul class="doc-list">`; enLista = true; }
             html += `<li>${l.replace(/^[-•]\s*/, "")}</li>`;
-        }
-
-        // ==============================
-        // 🔹 TEXTO NORMAL
-        // ==============================
-        else {
+        } else {
             cerrarLista();
             html += `<p class="doc-paragraph">${l}</p>`;
         }
     });
 
     cerrarLista();
-
     html += `</div>`;
-
     return html;
 }
+
 
 /* =========================
    MIS REQUERIMIENTOS
 ========================= */
-function obtenerRequerimientos() {
-    // Todos leen de la misma llave
-    return JSON.parse(localStorage.getItem("requerimientos")) || [];
-}
-
 function cargarEventosReq() {
     const buscador = document.getElementById("buscadorReq");
     const filtro = document.getElementById("filtroEstado");
-
     if (buscador) buscador.addEventListener("input", aplicarFiltrosReq);
     if (filtro) filtro.addEventListener("change", aplicarFiltrosReq);
 }
 
-function aplicarFiltrosReq() {
+async function aplicarFiltrosReq() {
     const texto = document.getElementById("buscadorReq")?.value.toLowerCase() || "";
     const estadoFiltro = document.getElementById("filtroEstado")?.value || "";
-    const usuarioActual = localStorage.getItem("usuarioLogueado");
 
-    if (!usuarioActual) return; // Si no hay usuario, no mostramos nada
-
-    const reqs = obtenerRequerimientos();
+    const reqs = await obtenerRequerimientos();
 
     const filtrados = reqs.filter(req => {
-        const esMio = req.autor &&
-            req.autor.trim().toLowerCase() === usuarioActual.trim().toLowerCase();
-
         const coincideTexto =
             (req.titulo || "").toLowerCase().includes(texto) ||
             (req.id || "").toLowerCase().includes(texto);
@@ -552,19 +535,18 @@ function aplicarFiltrosReq() {
             !estadoFiltro ||
             (req.estado || "").trim().toLowerCase() === estadoFiltro.trim().toLowerCase();
 
-        return esMio && coincideTexto && coincideEstado;
+        return coincideTexto && coincideEstado;
     });
 
-    filtrados.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+    filtrados.sort((a, b) => (b.timestamp_ms || 0) - (a.timestamp_ms || 0));
 
     renderizarRequerimientos(filtrados);
-    actualizarContadorReq();
+    await actualizarContadorReq();
 }
 
 function renderizarRequerimientos(lista) {
     const contenedor = document.getElementById("listaRequerimientos");
     if (!contenedor) return;
-
     contenedor.innerHTML = "";
 
     if (lista.length === 0) {
@@ -588,30 +570,34 @@ function renderizarRequerimientos(lista) {
     });
 }
 
-function actualizarContadorReq() {
+async function actualizarContadorReq() {
     const contador = document.getElementById("contadorReq");
     const usuario = localStorage.getItem("usuarioLogueado");
     if (!contador || !usuario) return;
-
-    const todos = obtenerRequerimientos();
-    const misRequerimientosCount = todos.filter(r =>
-        r.autor?.trim().toLowerCase() === usuario.trim().toLowerCase()
-    ).length;
-
-
-    contador.textContent = misRequerimientosCount;
+    try {
+        const reqs = await obtenerRequerimientos();
+        contador.textContent = reqs.length;
+    } catch (error) {
+        console.error("Error actualizando contador:", error);
+        contador.textContent = "0";
+    }
 }
 
-
 function obtenerClaseEstado(estado) {
-    switch (estado) {
-        case "Pendiente": return "pendiente";
-        case "En validación": return "validacion";
-        case "Aprobado": return "aprobado";
-        case "Rechazado": return "rechazado";
-        case "Editado": return "editado";
-        default: return "";
-    }
+
+    if (!estado) return "";
+
+    const e = estado.toString().trim().toLowerCase();
+
+    if (e.includes("pendiente")) return "pendiente";
+    if (e.includes("valid")) return "validacion";
+    if (e.includes("listo")) return "validacion";
+    if (e.includes("aprobado")) return "aprobado";
+    if (e.includes("rechaz")) return "rechazado";
+    if (e.includes("edit")) return "editado";
+
+    console.warn("Estado no reconocido:", estado);
+    return "";
 }
 
 function verDetalleReq(req) {
@@ -621,11 +607,11 @@ function verDetalleReq(req) {
     window.location.href = "resultado.html";
 }
 
+
 /* =========================
    GENERACIÓN DE PDF
 ========================= */
 async function descargarPDF() {
-
     const element = document.getElementById("resultadoContenido");
 
     if (!element || element.innerText.includes("Cargando")) {
@@ -637,92 +623,59 @@ async function descargarPDF() {
 
     try {
         const { jsPDF } = window.jspdf;
-
-        const doc = new jsPDF({
-            orientation: "portrait",
-            unit: "mm",
-            format: "a4"
-        });
+        const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
 
         const pageWidth = doc.internal.pageSize.getWidth();
         const pageHeight = doc.internal.pageSize.getHeight();
-
         const margin = 15;
         const usableWidth = pageWidth - margin * 2;
         const startY = 20;
         const lineHeight = 4;
-
         let y = startY;
         let pageCount = 1;
 
         doc.setFont("helvetica", "bold");
         doc.setFontSize(14);
         doc.text("Documento de Requerimiento", pageWidth / 2, 10, { align: "center" });
-
         doc.setFontSize(8);
         doc.setFont("helvetica", "normal");
         doc.text(`ID: ${reqId}`, pageWidth - margin, 10, { align: "right" });
-
         doc.line(margin, 12, pageWidth - margin, 12);
 
-        const texto = element.innerText.trim();
-        const lineasOriginales = texto.split("\n");
+        const lineasOriginales = element.innerText.trim().split("\n");
 
         lineasOriginales.forEach(linea => {
-
             const l = linea.trim();
             if (!l) return;
 
-            const esTitulo =
-                l.toUpperCase() === l && l.length < 60;
-
-            const esSubtitulo =
-                l.endsWith(":");
+            const esTitulo = l.toUpperCase() === l && l.length < 60;
+            const esSubtitulo = l.endsWith(":");
 
             let fontSize = 12;
             let fontStyle = "normal";
-
-            if (esTitulo) {
-                fontSize = 11;
-                fontStyle = "bold";
-            }
-            else if (esSubtitulo) {
-                fontSize = 7;
-                fontStyle = "bold";
-            }
+            if (esTitulo) { fontSize = 11; fontStyle = "bold"; }
+            else if (esSubtitulo) { fontSize = 7; fontStyle = "bold"; }
 
             doc.setFont("helvetica", fontStyle);
             doc.setFontSize(fontSize);
 
             const lineas = doc.splitTextToSize(l, usableWidth);
-
             lineas.forEach(subLinea => {
-
                 if (y > pageHeight - 15) {
-
                     if (pageCount === 2) return;
-
                     doc.addPage();
                     pageCount++;
                     y = startY;
                 }
-
                 doc.text(subLinea, margin, y);
                 y += lineHeight;
             });
-
             y += 1;
         });
 
         doc.setFontSize(8);
         doc.setFont("helvetica", "normal");
-        doc.text(
-            "Generado por Portal de Requerimientos",
-            pageWidth / 2,
-            pageHeight - 5,
-            { align: "center" }
-        );
-
+        doc.text("Generado por Portal de Requerimientos", pageWidth / 2, pageHeight - 5, { align: "center" });
         doc.save(`Requerimiento_${reqId}.pdf`);
 
     } catch (error) {
@@ -731,17 +684,20 @@ async function descargarPDF() {
     }
 }
 
+
 /* =========================
-   VALIDACIÓN
+   VALIDACIÓN — BANDEJA
 ========================= */
-function cargarBandejaValidacion() {
+async function cargarBandejaValidacion() {
     const contenedor = document.getElementById("listaRequerimientos");
     if (!contenedor) return;
 
     const rol = localStorage.getItem("rol");
-    const requerimientos = obtenerRequerimientos();
+    let vista = "validacion";
 
-    requerimientos.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+    const requerimientos = await obtenerRequerimientos(vista);
+
+    requerimientos.sort((a, b) => (b.timestamp_ms || 0) - (a.timestamp_ms || 0));
 
     if (requerimientos.length === 0) {
         contenedor.innerHTML = `<div class="empty-state">📭 No hay requerimientos.</div>`;
@@ -754,7 +710,6 @@ function cargarBandejaValidacion() {
     requerimientos.forEach(req => {
         const card = document.createElement("div");
         card.className = "val-card";
-
         card.innerHTML = `
             <div class="val-card-header">
                 <span class="val-card-id"># ${req.id}</span>
@@ -763,16 +718,15 @@ function cargarBandejaValidacion() {
             <div class="val-card-body">
                 <div class="val-info-item">📅 <span>${req.fecha}</span></div>
                 <div class="val-info-item">👤 <span>${req.autor || "Sistema"}</span></div>
-                <div class="val-info-item">🚨 <span>${req.prioridad}</span></div>
+                <div class="val-info-item">🚨 <span>${req.prioridad || "—"}</span></div>
             </div>
             <div class="val-card-footer">
                 <span class="val-badge ${obtenerClaseEstado(req.estado)}">${req.estado}</span>
-                <span style="font-size: 12px; color: #2282bf; font-weight: 500;">
+                <span style="font-size:12px;color:#2282bf;font-weight:500;">
                     ${rol === "manager" ? "👁️ Ver →" : "Revisar →"}
                 </span>
             </div>
         `;
-
         card.addEventListener("click", () => abrirRequerimiento(req));
         contenedor.appendChild(card);
     });
@@ -780,184 +734,231 @@ function cargarBandejaValidacion() {
 
 function abrirRequerimiento(req) {
     const rol = localStorage.getItem("rol");
-
     localStorage.setItem("reqTemporal", req.contenido);
     localStorage.setItem("reqValidandoId", req.id);
     localStorage.setItem("origenNavegacion", "validacion");
 
     if (rol === "admin") {
         window.location.href = "validacionRequerimiento.html";
+    } else if (rol === "manager") {
+        window.location.href = "resultado.html";
     } else {
         window.location.href = "resultado.html";
     }
 }
 
-function cargarRequerimientoValidacion() {
+/* =========================
+   VALIDACIÓN — DETALLE
+========================= */
+async function cargarRequerimientoValidacion() {
     const contenedor = document.getElementById("resultadoContenido");
     if (!contenedor) return;
 
     const reqId = localStorage.getItem("reqValidandoId");
-    const db = obtenerRequerimientos();
-    const reqActual = db.find(r => r.id === reqId);
-
-    // HTML del requerimiento
-    const reqHTML = localStorage.getItem("reqTemporal") || reqActual?.contenido;
-
-    if (!reqHTML) {
+    if (!reqId) {
         contenedor.innerHTML = "⚠️ No hay requerimiento para validar.";
         return;
     }
 
-    // Prioridad
-    let prioridadHTML = "";
+    const reqActual = await obtenerRequerimientoPorId(reqId);
 
-    if (reqActual?.prioridad) {
+    if (!reqActual) {
+        contenedor.innerHTML = "⚠️ No se encontró el requerimiento.";
+        return;
+    }
+
+    let prioridadHTML = "";
+    if (reqActual.prioridad) {
         prioridadHTML = `
             <div class="priority-badge ${reqActual.prioridad.toLowerCase()}">
                 🚨 Prioridad: ${reqActual.prioridad}
-            </div>
-        `;
+            </div>`;
     }
 
-    // Banner Rechazado
     let alertaMotivo = "";
-
-    if (reqActual?.estado === "Rechazado" && reqActual?.comentario) {
+    if (reqActual.estado === "Rechazado" && reqActual.comentario) {
         alertaMotivo = `
-            <div class="reject-alert" style="
-                background: #fdf2f2;
-                border-left: 5px solid #e74c3c;
-                padding: 15px;
-                margin-bottom: 20px;
-                border-radius: 4px;
-                box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-            ">
-                <h4 style="color: #e74c3c; margin: 0; font-size: 16px;">
-                    ❌ Requerimiento Rechazado
-                </h4>
-                <p style="margin: 8px 0 0; color: #555; font-size: 14px; line-height: 1.4;">
+            <div class="reject-alert" style="background:#fdf2f2;border-left:5px solid #e74c3c;padding:15px;margin-bottom:20px;border-radius:4px;box-shadow:0 2px 4px rgba(0,0,0,0.05);">
+                <h4 style="color:#e74c3c;margin:0;font-size:16px;">❌ Requerimiento Rechazado</h4>
+                <p style="margin:8px 0 0;color:#555;font-size:14px;line-height:1.4;">
                     <strong>Motivo del rechazo:</strong> ${reqActual.comentario}
                 </p>
-            </div>
-        `;
+            </div>`;
     }
 
-    contenedor.innerHTML = alertaMotivo + prioridadHTML + reqHTML;
+    contenedor.innerHTML = alertaMotivo + prioridadHTML + (reqActual.contenido || "");
 
     // Adjuntos
-    if (reqActual?.adjuntos?.length > 0) {
+    const adjuntos = Array.isArray(reqActual.adjuntos) ? reqActual.adjuntos : [];
+    if (adjuntos.length > 0) {
         const adjDiv = document.createElement("div");
         adjDiv.className = "adjuntos-validacion";
         adjDiv.innerHTML = "<h3>📎 Adjuntos</h3>";
-
-        reqActual.adjuntos.forEach(adj => {
+        adjuntos.forEach(adj => {
             const link = document.createElement("a");
-            link.href = adj.data;
+            link.href = `data:${adj.tipo};base64,${adj.data}`;
             link.download = adj.nombre;
             link.textContent = adj.nombre;
+            link.target = "_blank";
             link.style.display = "block";
             adjDiv.appendChild(link);
         });
-
         contenedor.appendChild(adjDiv);
     }
 
-
-    const validaciones = JSON.parse(localStorage.getItem("validaciones")) || {};
-    const estadoChecksGuardado = validaciones[reqId];
-
     const checkPO = document.getElementById("checkPO");
     const checkQA = document.getElementById("checkQA");
-
-    if (estadoChecksGuardado && checkPO && checkQA) {
-        checkPO.checked = estadoChecksGuardado.po || false;
-        checkQA.checked = estadoChecksGuardado.qa || false;
+    if (checkPO && checkQA) {
+        checkPO.checked = reqActual.check_po || false;
+        checkQA.checked = reqActual.check_qa || false;
     }
 
     controlarValidaciones();
 }
 
-function rechazarRequerimiento() {
+// Función para mostrar los adjuntos en resultado.html
+function mostrarAdjuntos(adjuntos) {
+    const lista = document.getElementById("listaAdjuntos");
+    lista.innerHTML = "";
+
+    if (!adjuntos || adjuntos.length === 0) {
+        lista.innerHTML = "<p>No hay adjuntos.</p>";
+        return;
+    }
+
+    adjuntos.forEach((archivo, index) => {
+        const item = document.createElement("div");
+        item.className = "adjunto-item";
+
+        const link = document.createElement("a");
+        link.href = `data:${archivo.tipo};base64,${archivo.data}`;
+        link.download = archivo.nombre;
+        link.textContent = archivo.nombre;
+        link.target = "_blank";
+
+        item.appendChild(link);
+        lista.appendChild(item);
+    });
+}
+async function cargarDocumento() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const id = urlParams.get("id");
+
+    if (!id) return;
+
+    try {
+        const res = await fetch(`http://localhost:3000/requerimientos/${id}`);
+        const data = await res.json();
+
+        if (data.success) {
+            document.getElementById("resultadoContenido").innerHTML = data.data.contenido;
+
+            mostrarAdjuntos(data.data.adjuntos);
+        } else {
+            document.getElementById("resultadoContenido").innerHTML = "No se encontró el documento.";
+        }
+    } catch (err) {
+        console.error(err);
+        document.getElementById("resultadoContenido").innerHTML = "Error cargando el documento.";
+    }
+}
+
+/* =========================
+   RECHAZO
+========================= */
+async function rechazarRequerimiento() {
     const reqId = localStorage.getItem("reqValidandoId");
     const txtMotivo = document.getElementById("motivoRechazo");
     const motivo = txtMotivo ? txtMotivo.value.trim() : "";
-
     const rol = localStorage.getItem("rol");
+
     if (rol !== "admin") {
         alert("🚫 Solo ADMIN puede rechazar.");
         return;
     }
 
     if (!motivo) {
-        alert("⚠️ Por favor, ingresa un motivo para rechazar el requerimiento.");
+        alert("⚠️ Ingresa un motivo.");
         txtMotivo?.focus();
         return;
     }
 
-    if (confirm(`¿Estás seguro de rechazar el requerimiento ${reqId}?`)) {
-        const requerimientos = obtenerRequerimientos();
-        const index = requerimientos.findIndex(r => r.id === reqId);
+    if (!confirm(`¿Rechazar ${reqId}?`)) return;
 
-        if (index !== -1) {
-            requerimientos[index].estado = "Rechazado";
-            requerimientos[index].comentario = motivo;
+    try {
+        const ok = await actualizarRequerimiento(reqId, {
+            estado: "Rechazado",
+            comentario: motivo
+        });
 
-            // Resetear los checks de aprobación al rechazar
-            const validaciones = JSON.parse(localStorage.getItem("validaciones")) || {};
-            validaciones[reqId] = { po: false, qa: false };
-
-            localStorage.setItem(STORAGE_KEY_REQ, JSON.stringify(requerimientos));
-            localStorage.setItem("validaciones", JSON.stringify(validaciones));
-
-            alert(`❌ Requerimiento ${reqId} se rechazo correctamente!`);
-            window.location.href = "validacion.html";
+        if (!ok) {
+            alert("❌ Error al rechazar.");
+            return;
         }
+
+        alert(`❌ Requerimiento ${reqId} rechazado`);
+        window.location.href = "validacion.html";
+
+    } catch (error) {
+        console.error(error);
+        alert("❌ Error de conexión.");
     }
 }
 
-// ENVIAR A JIRA
+
+/* =========================
+   ENVIAR A JIRA
+========================= */
 async function enviarAJira(req) {
     try {
-        console.log("Enviando a JIRA:", req);
+        const timestamp = Number(req.timestamp_ms);
 
-        const response = await fetch(JIRA_WEBHOOK_URL, {
+        const fechaObj = !isNaN(timestamp) && timestamp > 0
+            ? new Date(timestamp)
+            : new Date();
+
+        const fechaISO = fechaObj.toISOString();
+
+        console.log("Fecha enviada a JIRA:", fechaISO);
+
+        const response = await fetch(`${API_URL}/crear-jira`, {
             method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-
                 tipoCaso: {
                     TituloJira: req.titulo || "REQ",
                     Subject: req.titulo || "Sin asunto",
                     IdByProject: req.id || ""
                 },
-
                 textoFinal: req.contenido || "",
-                fechaSolucion: req.fechaSolucion || null,
-                fechaRegistro: req.timestamp
-                    ? new Date(req.timestamp).toISOString()
-                    : new Date().toISOString(),
-
-                encargadoId: req.encargadoId || null,
-
+                fechaSolucion: req.fecha_solucion || null,
+                fechaRegistro: fechaISO,
+                encargadoId: req.encargado_id || null,
                 customfield_10120: req.centro_costo || null,
-
-                adjuntos: (req.adjuntos || []).map(adj => ({
+                adjuntos: (Array.isArray(req.adjuntos) ? req.adjuntos : []).map(adj => ({
                     nombre: adj.nombre,
                     tipo: adj.tipo,
-                    base64: adj.data.split(",")[1]
+                    data: adj.data
                 }))
-
             })
         });
 
-        if (!response.ok) {
-            throw new Error("Error enviando a JIRA");
-        }
+        if (!response.ok) throw new Error("Error enviando a JIRA");
 
         const data = await response.json().catch(() => ({}));
         console.log("Respuesta webhook JIRA:", data);
+
+        const rol = localStorage.getItem("rol");
+
+        const actualizado = await actualizarRequerimiento(req.id, {
+            estado: "Aprobado",
+            rol: rol
+        });
+
+        if (!actualizado) {
+            alert("Se envió a JIRA pero no se pudo actualizar el estado.");
+            return false;
+        }
 
         return true;
 
@@ -968,6 +969,10 @@ async function enviarAJira(req) {
     }
 }
 
+
+/* =========================
+   CONTROLAR VALIDACIONES (UI)
+========================= */
 function controlarValidaciones() {
     const checkPO = document.getElementById("checkPO");
     const checkQA = document.getElementById("checkQA");
@@ -979,118 +984,71 @@ function controlarValidaciones() {
     btnEnviar.disabled = false;
 
     if (checkPO.checked && checkQA.checked) {
-        if (estadoBadge) {
-            estadoBadge.className = "status-badge success";
-            estadoBadge.textContent = "Listo para enviar";
-        }
+        if (estadoBadge) { estadoBadge.className = "status-badge success"; estadoBadge.textContent = "Listo para enviar"; }
     } else if (checkPO.checked || checkQA.checked) {
-        if (estadoBadge) {
-            estadoBadge.className = "status-badge warning";
-            estadoBadge.textContent = "En validación";
-        }
+        if (estadoBadge) { estadoBadge.className = "status-badge warning"; estadoBadge.textContent = "En validación"; }
     } else {
-        if (estadoBadge) {
-            estadoBadge.className = "status-badge warning";
-            estadoBadge.textContent = "Pendiente de validaciones";
-        }
+        if (estadoBadge) { estadoBadge.className = "status-badge warning"; estadoBadge.textContent = "Pendiente de validaciones"; }
     }
 }
 
-function actualizarEstadoRequerimiento(nuevoEstado) {
-    const reqId = localStorage.getItem("reqValidandoId");
-    if (!reqId) return;
 
-    const requerimientos = JSON.parse(localStorage.getItem(STORAGE_KEY_REQ)) || [];
-    const index = requerimientos.findIndex(r => r.id === reqId);
-
-    if (index >= 0) {
-        requerimientos[index].estado = nuevoEstado;
-        localStorage.setItem(STORAGE_KEY_REQ, JSON.stringify(requerimientos));
-    }
-}
-
-function guardarValidacionEstado() {
+/* =========================
+   GUARDAR EDICIÓN
+========================= */
+async function guardarEdicion() {
     const rol = localStorage.getItem("rol");
-    if (rol !== "admin") return;
-
-    const reqId = localStorage.getItem("reqValidandoId");
-    if (!reqId) return;
-
-    const checkPO = document.getElementById("checkPO");
-    const checkQA = document.getElementById("checkQA");
-
-    if (!checkPO || !checkQA) return;
-
-    const estadoChecks = {
-        po: checkPO.checked,
-        qa: checkQA.checked
-    };
-
-    const validaciones = JSON.parse(localStorage.getItem("validaciones")) || {};
-    validaciones[reqId] = estadoChecks;
-
-    localStorage.setItem("validaciones", JSON.stringify(validaciones));
-
-    let requerimientos = obtenerRequerimientos();
-    const index = requerimientos.findIndex(r => r.id === reqId);
-
-    if (index !== -1) {
-        const estadoActual = requerimientos[index].estado;
-
-        if (checkPO.checked || checkQA.checked) {
-            if (estadoActual !== "Aprobado") {
-                requerimientos[index].estado = "En validación";
-            }
-        } else {
-            requerimientos[index].estado = "Pendiente";
-        }
-
-        localStorage.setItem(STORAGE_KEY_REQ, JSON.stringify(requerimientos));
-    }
-
-    controlarValidaciones();
-}
-
-// Botones
-function verPDF() {
-    window.location.href = "resultado.html";
-}
-
-function editarPDF() {
-    window.location.href = "editar.html";
-}
-
-function guardarEdicion() {
-    const rol = localStorage.getItem("rol");
-
     if (rol !== "admin") {
         alert("🚫 No tienes permisos para editar.");
         return;
     }
 
     const editor = document.getElementById("editorContenido");
-    const nuevoHTML = editor.innerHTML;
     const reqId = localStorage.getItem("reqValidandoId");
 
-    let requerimientos = JSON.parse(localStorage.getItem("requerimientos")) || [];
-    const index = requerimientos.findIndex(r => r.id === reqId);
+    if (!editor || !reqId) {
+        alert("⚠️ No se pudo identificar el requerimiento a editar.");
+        return;
+    }
 
-    if (index !== -1) {
-        requerimientos[index].contenido = nuevoHTML;
-        requerimientos[index].estado = "Editado";
+    const nuevoHTML = editor.innerHTML;
+    if (!nuevoHTML.trim()) {
+        alert("⚠️ El contenido no puede estar vacío.");
+        return;
+    }
 
-        localStorage.setItem("requerimientos", JSON.stringify(requerimientos));
+    try {
+        const ok = await actualizarRequerimiento(reqId, {
+            contenido: nuevoHTML,
+            estado: "Editado"
+        });
+
+        if (!ok) {
+            alert("❌ Error al guardar los cambios. Intenta nuevamente.");
+            return;
+        }
+
         localStorage.setItem("reqTemporal", nuevoHTML);
-
         alert(`✅ Requerimiento ${reqId} guardado exitosamente`);
         window.location.href = "validacion.html";
+
+    } catch (error) {
+        console.error("Error guardando edición:", error);
+        alert("❌ Error de conexión al guardar. Intenta nuevamente.");
     }
 }
+
+
+/* =========================
+   BOTONES NAVEGACIÓN
+========================= */
+function verPDF() { window.location.href = "resultado.html"; }
+function editarPDF() { window.location.href = "editar.html"; }
+
 
 /* =========================
    PERFIL
 ========================= */
-
 document.addEventListener("DOMContentLoaded", () => {
     if (window.location.pathname.includes("perfil.html")) {
         cargarPerfil();
@@ -1099,9 +1057,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
 async function cargarPerfil() {
     const usuario = localStorage.getItem("usuarioLogueado");
-
-
-
     if (!usuario) {
         alert("Sesión expirada");
         window.location.href = "index.html";
@@ -1118,36 +1073,29 @@ async function cargarPerfil() {
         }
 
         const u = data.usuario;
-
         document.getElementById("perfilNombre").textContent = u.nombre_usuario;
         document.getElementById("perfilCorreo").textContent = u.correo;
         document.getElementById("perfilUsuario").textContent = u.nombre_usuario;
         document.getElementById("perfilCentroCosto").textContent = u.centro_costo;
 
         const icono = document.getElementById("perfilIcono");
-
         if (icono && u.genero) {
-            if (u.genero === "F") {
-                icono.src = "img/mujer.png";
-            }
-            else if (u.genero === "M") {
-                icono.src = "img/hombre.png";
-            }
-            else {
-                icono.src = "img/avatar.png";
-            }
+            icono.src = u.genero === "F" ? "img/mujer.png"
+                : u.genero === "M" ? "img/hombre.png"
+                    : "img/avatar.png";
         }
 
-        console.log("Perfil recibido:", u);
     } catch (error) {
         console.error("Error cargando perfil:", error);
         alert("Error de conexión con el servidor");
     }
 }
 
-// CAMBIAR CONTRASEÑA
-async function cambiarPassword() {
 
+/* =========================
+   CAMBIAR CONTRASEÑA
+========================= */
+async function cambiarPassword() {
     const usuario = localStorage.getItem("usuarioLogueado");
     const actual = document.getElementById("passActual").value;
     const nueva = document.getElementById("passNueva").value;
@@ -1164,12 +1112,9 @@ async function cambiarPassword() {
             body: JSON.stringify({ usuario, actual, nueva })
         });
 
-        if (!resp.ok) {
-            throw new Error(`HTTP error! status: ${resp.status}`);
-        }
+        if (!resp.ok) throw new Error(`HTTP error! status: ${resp.status}`);
 
         const data = await resp.json();
-        console.log("Respuesta cambiar-password:", data);
 
         if (!data.success) {
             alert(data.message || "No se pudo cambiar la contraseña");
@@ -1183,7 +1128,73 @@ async function cambiarPassword() {
 
     } catch (error) {
         console.error("Error cambiar-password:", error);
-        alert("Error de conexión o servidor al cambiar la contraseña");
+        alert("Error de conexión al cambiar la contraseña");
+    }
+}
+
+/* =========================
+   GUARDAR CHECKS EN BD AL CAMBIAR
+========================= */
+document.addEventListener("DOMContentLoaded", () => {
+    const checkPO = document.getElementById("checkPO");
+    const checkQA = document.getElementById("checkQA");
+
+    if (checkPO) checkPO.addEventListener("change", () => handleCheckChange());
+    if (checkQA) checkQA.addEventListener("change", () => handleCheckChange());
+});
+
+async function handleCheckChange() {
+    const checkPO = document.getElementById("checkPO");
+    const checkQA = document.getElementById("checkQA");
+    const btnEnviar = document.getElementById("btnEnviarJira");
+    const estadoBadge = document.getElementById("estadoValidacion");
+    const reqId = localStorage.getItem("reqValidandoId");
+
+    if (!reqId) return;
+
+    if (checkPO.checked && checkQA.checked) {
+
+        btnEnviar.disabled = false;
+
+        if (estadoBadge) {
+            estadoBadge.className = "status-badge success";
+            estadoBadge.textContent = "Listo para enviar";
+        }
+
+    } else if (checkPO.checked || checkQA.checked) {
+
+        btnEnviar.disabled = true;
+
+        if (estadoBadge) {
+            estadoBadge.className = "status-badge warning";
+            estadoBadge.textContent = "En validación";
+        }
+
+    } else {
+
+        btnEnviar.disabled = true;
+
+        if (estadoBadge) {
+            estadoBadge.className = "status-badge warning";
+            estadoBadge.textContent = "Pendiente";
+        }
+    }
+
+    try {
+        const response = await fetch(`${API_URL}/requerimientos/${reqId}/validacion`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                po: checkPO.checked,
+                qa: checkQA.checked
+            })
+        });
+
+        const data = await response.json();
+        console.log("Respuesta validación:", data);
+
+    } catch (error) {
+        console.error("❌ Error guardando validación:", error);
     }
 }
 
@@ -1197,7 +1208,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const paginaActual = window.location.pathname.split("/").pop() || "index.html";
     const enLogin = paginaActual === "index.html";
 
-    // Protección de acceso y Seguridad
+    // ── Protección de acceso ──
     if (!usuario && !enLogin) {
         window.location.href = "index.html";
         return;
@@ -1210,16 +1221,16 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     const paginasSoloAdminManager = ["validacion.html"];
-    if (paginasSoloAdminManager.includes(paginaActual) && (rol !== "admin" && rol !== "manager")) {
+    if (paginasSoloAdminManager.includes(paginaActual) && rol !== "admin" && rol !== "manager") {
         window.location.href = "inicio.html";
         return;
     }
-    // Configuración de Interfaz según Rol
+
+    // ── Interfaz según rol ──
     if (rol === "manager") document.body.classList.add("manager");
 
     if (rol === "user") {
-        const elementosOcultar = ["cardValidar", "navValidar", "btnEnviarJira"];
-        elementosOcultar.forEach(id => {
+        ["cardValidar", "navValidar", "btnEnviarJira"].forEach(id => {
             const el = document.getElementById(id);
             if (el) el.style.display = "none";
         });
@@ -1230,6 +1241,11 @@ document.addEventListener("DOMContentLoaded", () => {
         setInterval(verificarInactividad, 30000);
     }
 
+    if (paginaActual === "nuevo.html") {
+        localStorage.setItem("threadId", generarThreadId());
+    }
+
+    // ── Teclado ──
     const passwordInput = document.getElementById("password");
     if (passwordInput) {
         passwordInput.addEventListener("keydown", e => {
@@ -1244,154 +1260,127 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
-    // Previsualización de Adjuntos (Global)
-    function renderFilePreview() {
-        const filePreview = document.getElementById("filePreview");
-        if (!filePreview) return;
-
-        filePreview.innerHTML = "";
-
-        archivosTemporalesGlobal.forEach((file, index) => {
-            const chip = document.createElement("div");
-            chip.classList.add("file-chip");
-            chip.innerHTML = `
-            📎 ${file.name} 
-            <button onclick="removeFile(${index})">✖</button>
-        `;
-            filePreview.appendChild(chip);
-        });
-    }
-
+    // ── Adjuntos ──
     const fileInput = document.getElementById("fileInput");
     const filePreview = document.getElementById("filePreview");
-
     if (fileInput && filePreview) {
         fileInput.addEventListener("change", function () {
-
             for (let i = 0; i < this.files.length; i++) {
                 archivosTemporalesGlobal.push(this.files[i]);
             }
-
             renderFilePreview();
-
-            // Permite volver a subir el mismo archivo
             fileInput.value = "";
         });
     }
 
-    // --- MIS REQUERIMIENTOS ---
-    const contenedorLista = document.getElementById("listaRequerimientos");
-    if (contenedorLista && paginaActual === "misRequerimientos.html") {
-        const requerimientos = obtenerRequerimientos();
-        const propios = requerimientos.filter(r =>
-            r.autor?.trim().toLowerCase() === usuario.trim().toLowerCase()
-        );
+    // ── MIS REQUERIMIENTOS ──
+    if (paginaActual === "misRequerimientos.html") {
+        (async () => {
+            const contenedorLista = document.getElementById("listaRequerimientos");
+            if (!contenedorLista) return;
 
-        actualizarContadorReq();
+            contenedorLista.innerHTML = '<div class="empty-state">⏳ Cargando requerimientos...</div>';
 
-        if (propios.length === 0) {
-            contenedorLista.innerHTML = '<div class="empty-state">📭 No tienes requerimientos registrados.</div>';
-        } else {
-            contenedorLista.innerHTML = "";
-            propios.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))
-                .forEach(req => {
-                    const fila = document.createElement("div");
-                    fila.className = "req-item";
-                    fila.innerHTML = `
-                        <div class="req-info">
-                            <span class="req-title"><strong>${req.titulo || "Sin título"}</strong></span>
-                            <span class="req-meta">📅 ${req.fecha}</span>
-                        </div>
-                        <div class="req-id">🆔 ${req.id}</div>
-                        <div class="req-status-badge ${obtenerClaseEstado(req.estado)}">${req.estado}</div>
-                    `;
-                    fila.addEventListener("click", () => verDetalleReq(req));
-                    contenedorLista.appendChild(fila);
-                });
-        }
-        aplicarFiltrosReq();
-        cargarEventosReq();
+            try {
+                const requerimientos = await obtenerRequerimientos("mis");
+                await actualizarContadorReq();
+
+                if (requerimientos.length === 0) {
+                    contenedorLista.innerHTML = '<div class="empty-state">📭 No tienes requerimientos registrados.</div>';
+                } else {
+                    contenedorLista.innerHTML = "";
+                    requerimientos.forEach(req => {
+                        const fila = document.createElement("div");
+                        fila.className = "req-item";
+                        fila.innerHTML = `
+                            <div class="req-info">
+                                <span class="req-title"><strong>${req.titulo || "Sin título"}</strong></span>
+                                <span class="req-meta">📅 ${req.fecha}</span>
+                            </div>
+                            <div class="req-id">🆔 ${req.id}</div>
+                            <div class="req-status-badge ${obtenerClaseEstado(req.estado)}">${req.estado}</div>
+                        `;
+                        fila.addEventListener("click", () => verDetalleReq(req));
+                        contenedorLista.appendChild(fila);
+                    });
+                }
+
+                await aplicarFiltrosReq();
+                cargarEventosReq();
+
+            } catch (error) {
+                console.error("Error cargando mis requerimientos:", error);
+                contenedorLista.innerHTML = '<div class="empty-state">❌ Error al cargar. Intenta recargar la página.</div>';
+            }
+        })();
     }
 
-    // --- RESULTADO / DETALLE ---
+    // ── RESULTADO / DETALLE ──
     if (paginaActual === "resultado.html") {
+        (async () => {
+            const contenedorContenido = document.getElementById("resultadoContenido");
+            if (!contenedorContenido) return;
 
-        const contenedorContenido = document.getElementById("resultadoContenido");
-        if (!contenedorContenido) return;
+            contenedorContenido.innerHTML = "<p>⏳ Cargando documento...</p>";
 
-        const reqId = localStorage.getItem("reqValidandoId");
-        const db = obtenerRequerimientos();
+            const reqId = localStorage.getItem("reqValidandoId");
+            if (!reqId) {
+                contenedorContenido.innerHTML = "⚠️ No hay requerimiento para mostrar.";
+                return;
+            }
 
-        if (!reqId) {
-            contenedorContenido.innerHTML = "⚠️ No hay requerimiento para mostrar.";
-            return;
-        }
+            try {
+                const reqDetalle = await obtenerRequerimientoPorId(reqId);
 
-        const reqDetalle = db.find(r => r.id === reqId);
+                if (!reqDetalle) {
+                    contenedorContenido.innerHTML = "⚠️ No se encontró el requerimiento.";
+                    return;
+                }
 
-        if (!reqDetalle) {
-            contenedorContenido.innerHTML = "⚠️ No se encontró el requerimiento.";
-            return;
-        }
+                let alertaMotivo = "";
+                if (reqDetalle.estado === "Rechazado" && reqDetalle.comentario) {
+                    alertaMotivo = `
+                        <div class="reject-alert" style="background:#fdf2f2;border-left:5px solid #e74c3c;padding:15px;margin-bottom:20px;border-radius:4px;box-shadow:0 2px 4px rgba(0,0,0,0.05);">
+                            <h4 style="color:#e74c3c;margin:0;font-size:16px;">❌ Requerimiento Rechazado</h4>
+                            <p style="margin:8px 0 0;color:#555;font-size:14px;line-height:1.4;">
+                                <strong>Motivo del rechazo:</strong> ${reqDetalle.comentario}
+                            </p>
+                        </div>`;
+                }
 
-        // 🔴 Banner de rechazo si aplica
-        let alertaMotivo = "";
-        if (reqDetalle.estado === "Rechazado" && reqDetalle.comentario) {
-            alertaMotivo = `
-            <div class="reject-alert" style="
-                background: #fdf2f2;
-                border-left: 5px solid #e74c3c;
-                padding: 15px;
-                margin-bottom: 20px;
-                border-radius: 4px;
-                box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-            ">
-                <h4 style="color: #e74c3c; margin: 0; font-size: 16px;">
-                    ❌ Requerimiento Rechazado
-                </h4>
-                <p style="margin: 8px 0 0; color: #555; font-size: 14px; line-height: 1.4;">
-                    <strong>Motivo del rechazo:</strong> ${reqDetalle.comentario}
-                </p>
-            </div>`;
-        }
+                contenedorContenido.innerHTML = alertaMotivo + (reqDetalle.contenido || "⚠️ No hay documento para mostrar.");
 
-        contenedorContenido.innerHTML =
-            alertaMotivo + (reqDetalle.contenido || "⚠️ No hay documento para mostrar.");
+                const adjuntos = Array.isArray(reqDetalle.adjuntos) ? reqDetalle.adjuntos : [];
 
-        //  Mostrar adjuntos si existen
-        if (reqDetalle.adjuntos && reqDetalle.adjuntos.length > 0) {
+                if (adjuntos.length > 0) {
 
-            const adjDiv = document.createElement("div");
-            adjDiv.style.marginTop = "30px";
-            adjDiv.style.padding = "15px";
-            adjDiv.style.background = "#f8f9fb";
-            adjDiv.style.borderRadius = "8px";
-            adjDiv.style.border = "1px solid #e0e6ed";
+                    const lista = document.getElementById("listaAdjuntos");
+                    lista.innerHTML = "";
 
-            const tituloAdj = document.createElement("h3");
-            tituloAdj.textContent = "📎 Adjuntos";
-            tituloAdj.style.marginBottom = "10px";
-            adjDiv.appendChild(tituloAdj);
+                    adjuntos.forEach(adj => {
 
-            reqDetalle.adjuntos.forEach(adj => {
+                        const item = document.createElement("div");
+                        item.className = "adjunto-item";
 
-                const link = document.createElement("a");
-                link.href = adj.data;
-                link.download = adj.nombre;
-                link.textContent = "⬇ " + adj.nombre;
-                link.style.display = "block";
-                link.style.marginBottom = "8px";
-                link.style.color = "#2282bf";
-                link.style.textDecoration = "none";
-                link.style.fontWeight = "500";
+                        const link = document.createElement("a");
+                        link.href = `data:${adj.tipo};base64,${adj.data}`;
+                        link.textContent = adj.nombre;
+                        link.target = "_blank";
+                        link.download = adj.nombre;
 
-                adjDiv.appendChild(link);
-            });
+                        item.appendChild(link);
+                        lista.appendChild(item);
+                    });
+                }
 
-            contenedorContenido.appendChild(adjDiv);
-        }
+            } catch (error) {
+                console.error("Error cargando detalle:", error);
+                contenedorContenido.innerHTML = "❌ Error al cargar el documento. Intenta recargar la página.";
+            }
+        })();
     }
 
+    // ── VALIDACIÓN ──
     if (paginaActual === "validacion.html") {
         cargarBandejaValidacion();
     }
@@ -1401,21 +1390,14 @@ document.addEventListener("DOMContentLoaded", () => {
         controlarValidaciones();
     }
 
-    // --- EDITOR ---
+    // ── EDITOR ──
     if (paginaActual === "editar.html") {
         const contenidoHTML = localStorage.getItem("reqTemporal");
         const editor = document.getElementById("editorContenido");
         if (contenidoHTML && editor) editor.innerHTML = contenidoHTML;
     }
 
-    document.addEventListener("change", (e) => {
-        if (e.target.id === "checkPO" || e.target.id === "checkQA") {
-            guardarValidacionEstado();
-            controlarValidaciones();
-        }
-    });
-
-    // Boton enviar a JIRA
+    // ── Botón enviar a JIRA ──
     const btnEnviar = document.getElementById("btnEnviarJira");
     if (btnEnviar) {
         btnEnviar.addEventListener("click", async () => {
@@ -1426,33 +1408,35 @@ document.addEventListener("DOMContentLoaded", () => {
             if (rol !== "admin") return alert("🚫 Solo ADMIN puede enviar a JIRA.");
             if (!checkPO?.checked) return alert("⚠️ Falta la validación del Product Owner (PO).");
             if (!checkQA?.checked) return alert("⚠️ Falta la validación de QA.");
-
             if (!confirm(`🚀 ¿Enviar requerimiento ${reqId} a JIRA?`)) return;
 
-            const requerimientos = obtenerRequerimientos();
-            const index = requerimientos.findIndex(r => r.id === reqId);
+            try {
+                const req = await obtenerRequerimientoPorId(reqId);
+                if (!req) return alert("⚠️ Requerimiento no encontrado");
 
-            if (index === -1) return alert("⚠️ Requerimiento no encontrado");
+                const enviado = await enviarAJira(req);
+                if (!enviado) return;
 
+                const ok = await actualizarRequerimiento(reqId, {
+                    estado: "Aprobado",
+                    enviado_jira: true,
+                    fecha_envio_jira: new Date().toLocaleString()
+                });
 
-            const req = requerimientos[index];
+                if (!ok) {
+                    alert("⚠️ Se envió a JIRA pero no se pudo actualizar el estado. Contacta al administrador.");
+                    return;
+                }
 
-            // Enviar al webhook
-            const enviado = await enviarAJira(req);
+                alert(`✅ Requerimiento ${reqId} enviado a JIRA 🚀`);
+                window.location.href = "validacion.html";
 
-            if (!enviado) return;
-
-            requerimientos[index].estado = "Aprobado";
-            requerimientos[index].enviadoAJira = true;
-            requerimientos[index].fechaEnvioJira = new Date().toLocaleString();
-
-            localStorage.setItem("requerimientos", JSON.stringify(requerimientos));
-
-            alert(`✅ Requerimiento ${reqId} enviado a JIRA 🚀`);
-            window.location.href = "validacion.html";
+            } catch (error) {
+                console.error("Error enviando a JIRA:", error);
+                alert("❌ Error de conexión al enviar a JIRA. Intenta nuevamente.");
+            }
         });
     }
 
-    // Finalizar scroll
     if (typeof scrollToBottom === "function") scrollToBottom(true);
 });

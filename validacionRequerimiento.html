@@ -47,8 +47,14 @@
 
         <section class="result-card">
 
-            <div class="status-badge warning" id="estadoValidacion">
-                Pendiente de validación
+            <div class="card-top-bar">
+                <div class="status-badge warning" id="estadoValidacion">
+                    Pendiente de validación
+                </div>
+
+                <button class="btn-icon-volver top-volver" onclick="irValidacion()" title="Volver a la lista">
+                    <img src="img/anterior.png" class="img-volver">
+                </button>
             </div>
 
             <div class="document-preview" id="resultadoContenido">
@@ -88,10 +94,6 @@
             </div>
 
             <div class="actions-buttons">
-                <button class="btn-icon-volver" onclick="irValidacion()" title="Volver a la lista">
-                    <img src="img/anterior.png" alt="Regresar" class="img-volver">
-                </button>
-
                 <div class="buttons-right">
                     <button class="btn-primary" onclick="verPDF()">👁️ Ver PDF</button>
                     <button class="btn-secondary" onclick="editarPDF()">✏️ Editar</button>
@@ -101,7 +103,7 @@
                     </button>
 
                     <button id="btnEnviarJira" class="btn-success-modern" disabled>
-                        🚀 Aprobar y Enviar a JIRA
+                        🚀 Aprobar y Enviar
                     </button>
                 </div>
             </div>
