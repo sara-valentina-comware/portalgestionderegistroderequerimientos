@@ -920,6 +920,17 @@ async function enviarAJira(req) {
         const fechaISO = fechaObj.toISOString();
 
         console.log("Fecha enviada a JIRA:", fechaISO);
+        
+        let centroCostoObjeto = null;
+
+        if (req.centro_costo) {
+            const partes = req.centro_costo.split(" - ");
+
+            centroCostoObjeto = {
+                id: partes[0].trim(),
+                value: partes.slice(1).join(" - ").trim()
+            };
+        }
 
         const response = await fetch(`${API_URL}/crear-jira`, {
             method: "POST",
@@ -934,7 +945,7 @@ async function enviarAJira(req) {
                 fechaSolucion: req.fecha_solucion || null,
                 fechaRegistro: fechaISO,
                 encargadoId: req.encargado_id || null,
-                customfield_10120: req.centro_costo || null,
+                customfield_10120: centroCostoObjeto,
                 adjuntos: (Array.isArray(req.adjuntos) ? req.adjuntos : []).map(adj => ({
                     nombre: adj.nombre,
                     tipo: adj.tipo,

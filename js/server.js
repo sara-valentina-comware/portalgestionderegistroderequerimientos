@@ -483,9 +483,7 @@ async function crearIssue({ summary, description, sprintId, centroCosto, fechaRe
                 description,
 
                 // Centro de Costos
-                customfield_10120: centroCosto
-                    ? { id: centroCosto }
-                    : undefined,
+                customfield_10120: centroCosto || undefined,
 
                 // Sprint
                 customfield_10020: Number(sprintId),
@@ -568,15 +566,13 @@ app.post("/crear-jira", async (req, res) => {
         console.log("Centro costo recibido:", customfield_10120);
         const textoPlano = convertirATextoPlano(textoFinal);
         const description = construirADF(textoPlano);
-        const centroCostoId = customfield_10120
-            ? await obtenerIdCentroCosto(customfield_10120)
-            : null;
+        const centroCostoObjeto = customfield_10120 || null;
 
         const issue = await crearIssue({
             summary,
             description,
             sprintId: sprint.id,
-            centroCosto: centroCostoId,
+            centroCosto: centroCostoObjeto,
             fechaRegistro
         });
 
