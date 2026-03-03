@@ -1,14 +1,33 @@
 require("dotenv").config();
 
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+
 const express = require("express");
 const cors = require("cors");
+
 const { Pool } = require("pg");
 const bcrypt = require("bcrypt");
+const axios = require("axios");
+const adjuntosPorThread = {};
+const FormData = require("form-data");
+const path = require("path");
+const fs = require("fs");
+
+const multer = require("multer");
+const upload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 20 * 1024 * 1024 }
+});
 
 const app = express();
 
-app.use(cors());
-app.use(express.json());
+app.use(cors({
+    origin: "http://127.0.0.1:5501",
+    credentials: true
+}));
+
+app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
 
 /* POSTGRES CONNECTION */
@@ -149,6 +168,484 @@ app.post("/cambiar-password", async (req, res) => {
         res.status(500).json({ success: false });
 
     }
+});
+
+// ─── NOVA DIRECTO ───────────────────────────────────────────
+
+let novaToken = null;
+let tokenExpira = 0;
+
+async function obtenerTokenNova() {
+    if (novaToken && Date.now() < tokenExpira) {
+        return novaToken;
+    }
+
+    const loginResponse = await axios.post(
+        "https://api-backend-service.comware.com.co:3026/api/auth/login",
+        {
+            username: process.env.NOVA_USER,
+            password: process.env.NOVA_PASS,
+            captcha: "1"
+        }
+    );
+
+    novaToken = loginResponse.data.token;
+
+    // Token válido por 50 minutos
+    tokenExpira = Date.now() + (50 * 60 * 1000);
+
+    return novaToken;
+}
+
+
+app.post("/api/nova", upload.array("files"), async (req, res) => {
+    try {
+
+        const { message, threadId, channel = "web" } = req.body;
+
+        if (!threadId) {
+            return res.status(400).json({ error: "threadId es obligatorio" });
+        }
+
+        if (!adjuntosPorThread[threadId]) {
+            adjuntosPorThread[threadId] = [];
+        }
+
+        if (req.files && req.files.length > 0) {
+            const nuevosAdjuntos = req.files.map(file => ({
+                nombre: file.originalname,
+                tipo: file.mimetype,
+                data: file.buffer.toString("base64")
+            }));
+
+            adjuntosPorThread[threadId].push(...nuevosAdjuntos);
+        }
+
+        const token = await obtenerTokenNova();
+
+        let reply = "Sin respuesta del asistente.";
+
+        try {
+            const novaResponse = await axios.post(
+                "https://api-backend-service.comware.com.co:3026/api/sam-assistant/user-question-bp/4280d8c1-1022-4f44-bd05-d1d5dd3bd66c",
+                {
+                    question: message,
+                    threadId,
+                    channel
+                },
+                {
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                        "Content-Type": "application/json"
+                    },
+                    timeout: 60000
+                }
+            );
+
+            reply =
+                novaResponse.data.isLastContent ||
+                novaResponse.data.reply ||
+                novaResponse.data.mensaje ||
+                reply;
+
+        } catch (novaError) {
+            console.error("Error llamando Nova:", novaError.message);
+            reply = "⚠️ Nova no respondió, pero los adjuntos fueron recibidos.";
+        }
+
+        return res.json({
+            reply,
+            adjuntos: adjuntosPorThread[threadId] || []
+        });
+
+    } catch (error) {
+        console.error("ERROR GENERAL NOVA:", error);
+        return res.status(500).json({
+            error: "Error interno del servidor"
+        });
+    }
+});
+
+// ─── REQUERIMIENTOS ───────────────────────────────────────────
+
+app.get("/requerimientos", async (req, res) => {
+    const { usuario, vista } = req.query;
+    let query = "";
+    let values = [];
+
+    if (vista === "mis") {
+        query = `SELECT * FROM requerimientos_pgrr WHERE autor = $1 ORDER BY timestamp_ms DESC`;
+        values = [usuario];
+    } else {
+        query = `SELECT * FROM requerimientos_pgrr ORDER BY timestamp_ms DESC`;
+    }
+
+    try {
+        const result = await pool.query(query, values);
+        res.json({ success: true, data: result.rows });
+    } catch (err) {
+        console.error("Error al obtener requerimientos:", err);
+        res.json({ success: false, data: [] });
+    }
+});
+
+// Obtener un requerimiento por ID
+app.get("/requerimientos/:id", async (req, res) => {
+    try {
+        const result = await pool.query(
+            `SELECT * FROM requerimientos_pgrr WHERE id = $1`,
+            [req.params.id]
+        );
+
+        if (result.rows.length === 0)
+            return res.json({ success: false });
+
+        const r = result.rows[0];
+
+        res.json({
+            success: true,
+            data: {
+                ...r,
+                adjuntos: typeof r.adjuntos === "string"
+                    ? JSON.parse(r.adjuntos)
+                    : r.adjuntos || []
+            }
+        });
+
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ success: false });
+    }
+});
+
+// Crear requerimiento
+app.post("/requerimientos", async (req, res) => {
+    const {
+        titulo,
+        autor,
+        fecha,
+        timestamp_ms,
+        contenido,
+        estado,
+        prioridad,
+        tipo_caso,
+        fecha_solucion,
+        encargado_id,
+        centro_costo,
+        adjuntos,
+        threadId
+    } = req.body;
+
+    const adjuntosFinal = JSON.stringify(
+        Array.isArray(adjuntos) ? adjuntos : []
+    );
+
+    try {
+
+        const last = await pool.query(
+            `SELECT id FROM requerimientos_pgrr ORDER BY timestamp_ms DESC LIMIT 1`
+        );
+
+        let siguiente = 1;
+        if (last.rows.length > 0) {
+            const match = last.rows[0].id?.match(/\d+/);
+            if (match) siguiente = parseInt(match[0]) + 1;
+        }
+
+        const id = "REQ_" + String(siguiente).padStart(4, "0");
+
+        await pool.query(
+            `INSERT INTO requerimientos_pgrr
+             (id, titulo, autor, fecha, timestamp_ms, contenido, estado,
+              prioridad, tipo_caso, fecha_solucion, encargado_id, centro_costo, adjuntos)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+            [
+                id,
+                titulo,
+                autor,
+                fecha,
+                timestamp_ms,
+                contenido,
+                estado || "Pendiente",
+                prioridad,
+                tipo_caso || "Requerimiento",
+                fecha_solucion,
+                encargado_id,
+                centro_costo,
+                adjuntosFinal
+            ]
+        );
+
+        console.log("Adjuntos guardados en BD:", adjuntosFinal.length);
+
+        if (threadId && adjuntosPorThread[threadId]) {
+            delete adjuntosPorThread[threadId];
+        }
+
+        res.json({ success: true, id });
+
+    } catch (error) {
+        console.error("Error creando requerimiento:", error);
+        res.status(500).json({ success: false });
+    }
+});
+
+// Actualizar estado / campos de un requerimiento
+app.patch("/requerimientos/:id", async (req, res) => {
+    const { id } = req.params;
+    const campos = req.body;
+
+    const permitidos = ["estado", "comentario", "contenido",
+        "enviado_jira", "fecha_envio_jira", "prioridad"];
+    const sets = [];
+    const valores = [];
+    let i = 1;
+
+    for (const key of permitidos) {
+        if (campos[key] !== undefined) {
+            sets.push(`${key} = $${i++}`);
+            valores.push(campos[key]);
+        }
+    }
+
+    if (sets.length === 0) return res.json({ success: false, message: "Nada que actualizar" });
+
+    valores.push(id);
+    try {
+        await pool.query(
+            `UPDATE requerimientos_pgrr SET ${sets.join(", ")} WHERE id = $${i}`,
+            valores
+        );
+        res.json({ success: true });
+    } catch (error) {
+        console.error("Error actualizando requerimiento:", error);
+        res.status(500).json({ success: false });
+    }
+});
+
+app.patch("/requerimientos/:id/validacion", async (req, res) => {
+    const { id } = req.params;
+    const { po, qa } = req.body;
+
+    try {
+
+        let nuevoEstado = "Pendiente";
+
+        if (po && qa) {
+            nuevoEstado = "Listo para enviar";
+        } else if (po || qa) {
+            nuevoEstado = "En validación";
+        }
+
+        await pool.query(
+            `UPDATE requerimientos_pgrr 
+             SET check_po = $1, 
+                 check_qa = $2,
+                 estado = $3
+             WHERE id = $4`,
+            [po, qa, nuevoEstado, id]
+        );
+
+        res.json({ success: true });
+
+    } catch (error) {
+        console.error("Error guardando validacion:", error);
+        res.status(500).json({ success: false });
+    }
+});
+
+// ENVIAR A JIRA
+async function obtenerSprintActivo() {
+    const response = await axios.get(
+        "https://comwaredev.atlassian.net/rest/agile/1.0/board/375/sprint?state=active",
+        {
+            auth: {
+                username: process.env.JIRA_EMAIL,
+                password: process.env.JIRA_API_TOKEN,
+            },
+            headers: {
+                Accept: "application/json",
+            },
+        }
+    );
+
+    return response.data.values?.[0];
+}
+
+async function crearIssue({ summary, description, sprintId, centroCosto, fechaRegistro }) {
+    const response = await axios.post(
+        "https://comwaredev.atlassian.net/rest/api/3/issue",
+        {
+            fields: {
+                project: { id: "10405" },
+                issuetype: { id: "10439" },
+                summary,
+                description,
+
+                // Centro de Costos
+                customfield_10120: centroCosto
+                    ? { id: centroCosto }
+                    : undefined,
+
+                // Sprint
+                customfield_10020: Number(sprintId),
+
+                // Fecha
+                customfield_10015: fechaRegistro,
+            },
+        },
+        {
+            auth: {
+                username: process.env.JIRA_EMAIL,
+                password: process.env.JIRA_API_TOKEN,
+            },
+            headers: {
+                "Content-Type": "application/json",
+            },
+        }
+    );
+
+    return response.data;
+}
+
+async function subirAdjunto(issueKey, archivo) {
+    await axios.post(
+        `https://comwaredev.atlassian.net/rest/api/3/issue/${issueKey}/attachments`,
+        archivo.buffer,
+        {
+            auth: {
+                username: process.env.JIRA_EMAIL,
+                password: process.env.JIRA_API_TOKEN,
+            },
+            headers: {
+                "X-Atlassian-Token": "no-check",
+                "Content-Type": archivo.mimetype,
+            },
+        }
+    );
+}
+
+app.post("/crear-jira", async (req, res) => {
+    try {
+
+        const {
+            tipoCaso,
+            textoFinal,
+            fechaRegistro,
+            customfield_10120,
+            adjuntos
+        } = req.body;
+
+        const sprint = await obtenerSprintActivo();
+        if (!sprint) {
+            return res.status(400).json({ error: "No hay sprint activo" });
+        }
+
+        const summary = `[MANAGER] ${tipoCaso?.Subject || "REQ"} - ${tipoCaso?.IdByProject || ""}`;
+        function convertirATextoPlano(html) {
+            if (!html) return "";
+
+            return html
+                .replace(/<br\s*\/?>/gi, "\n")
+                .replace(/<\/p>/gi, "\n")
+                .replace(/<[^>]+>/g, "")
+                .trim();
+        }
+
+        function construirADF(texto) {
+            return {
+                type: "doc",
+                version: 1,
+                content: texto.split("\n").map(linea => ({
+                    type: "paragraph",
+                    content: linea
+                        ? [{ type: "text", text: linea }]
+                        : []
+                }))
+            };
+        }
+
+        console.log("Centro costo recibido:", customfield_10120);
+        const textoPlano = convertirATextoPlano(textoFinal);
+        const description = construirADF(textoPlano);
+        const centroCostoId = customfield_10120
+            ? await obtenerIdCentroCosto(customfield_10120)
+            : null;
+
+        const issue = await crearIssue({
+            summary,
+            description,
+            sprintId: sprint.id,
+            centroCosto: centroCostoId,
+            fechaRegistro
+        });
+
+        if (Array.isArray(adjuntos) && adjuntos.length > 0) {
+
+            for (const archivo of adjuntos) {
+
+                try {
+
+                    if (!archivo?.data) continue;
+
+                    if (archivo.data.length > 15_000_000) {
+                        console.log("Archivo demasiado grande, omitido:", archivo.nombre);
+                        continue;
+                    }
+
+                    const buffer = Buffer.from(archivo.data, "base64");
+
+                    const form = new FormData();
+                    form.append("file", buffer, {
+                        filename: archivo.nombre,
+                        contentType: archivo.tipo
+                    });
+
+                    await axios.post(
+                        `https://comwaredev.atlassian.net/rest/api/3/issue/${issue.key}/attachments`,
+                        form,
+                        {
+                            auth: {
+                                username: process.env.JIRA_EMAIL,
+                                password: process.env.JIRA_API_TOKEN,
+                            },
+                            headers: {
+                                ...form.getHeaders(),
+                                "X-Atlassian-Token": "no-check"
+                            },
+                            maxBodyLength: Infinity,
+                            maxContentLength: Infinity
+                        }
+                    );
+
+                } catch (uploadError) {
+                    console.error("❌ Error subiendo adjunto:", uploadError.message);
+                }
+            }
+        }
+
+        res.json({ success: true, issueKey: issue.key });
+
+    } catch (error) {
+        console.error("🔥 ERROR REAL JIRA:", error.response?.data || error);
+        res.status(500).json({
+            error: error.response?.data || error.message
+        });
+    }
+});
+
+app.use((err, req, res, next) => {
+    console.error("🔥 ERROR GLOBAL:", err);
+
+    if (err.type === "entity.too.large") {
+        return res.status(413).json({
+            error: "Archivo demasiado grande"
+        });
+    }
+
+    res.status(500).json({
+        error: "Error interno del servidor"
+    });
 });
 
 app.listen(3000, () => {

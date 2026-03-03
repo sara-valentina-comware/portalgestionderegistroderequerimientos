@@ -1138,6 +1138,7 @@ textarea#editorContenido {
     border-left: 4px solid #2282bf;
     padding-left: 10px;
 }
+
 .doc-section-title:first-of-type {
     margin-top: 10px;
 }
@@ -1243,7 +1244,79 @@ textarea#editorContenido {
     white-space: pre-line;
 }
 
+/* adjuntos */
+.adjuntos-seccion {
+    margin-top: 20px;
+    padding: 20px;
+    border-top: 1px solid #eee;
+}
 
+.lista-adjuntos-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 15px;
+    margin-top: 10px;
+}
+
+.archivo-card {
+    background: #f9f9f9;
+    padding: 12px;
+    border-radius: 8px;
+    border: 1px solid #ddd;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    text-align: center;
+}
+
+.archivo-info {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    font-size: 0.9em;
+    color: #333;
+}
+
+.mini-icono {
+    width: 40px;
+    height: 40px;
+    margin-bottom: 5px;
+}
+
+.btn-descargar-adjunto {
+    background-color: #007bff;
+    color: white;
+    text-decoration: none;
+    padding: 5px 15px;
+    border-radius: 4px;
+    font-size: 0.85em;
+    transition: background 0.3s;
+}
+
+.btn-descargar-adjunto:hover {
+    background-color: #0056b3;
+}
+
+.lista-adjuntos-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.adjunto-item a {
+    display: inline-block;
+    padding: 8px 12px;
+    background-color: #f0f0f0;
+    border-radius: 5px;
+    text-decoration: none;
+    color: #333;
+    transition: background 0.2s;
+}
+
+.adjunto-item a:hover {
+    background-color: #dcdcdc;
+}
 
 /* BOTONES */
 .actions-buttons {
