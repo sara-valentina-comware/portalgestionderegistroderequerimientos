@@ -449,8 +449,9 @@ function convertirPlantillaAHTML(texto) {
         .filter(l => l !== "" && !/^Plantilla Final Generada/i.test(l));
 
     const tituloPrincipal = lineas[0] || "Requerimiento";
-    let html = `<div class="doc-pro-view"><h1 class="doc-main-title">${tituloPrincipal}</h1>`;
-    let enLista = false;
+    let html = `<div class="doc-pro-view">`;
+
+    let skipNext = false;
 
     const cerrarLista = () => {
         if (enLista) { html += `</ul>`; enLista = false; }
@@ -486,23 +487,35 @@ function convertirPlantillaAHTML(texto) {
     ];
 
     lineas.forEach((l, index) => {
-        if (index === 0) return;
-        if (l === tituloPrincipal) return;
 
-        if (titulosSecundarios.includes(l)) {
-            cerrarLista();
-            html += `<h2 class="doc-section-title">${l}</h2>`;
-        } else if (subtitulos.includes(l)) {
-            cerrarLista();
-            html += `<h3 class="doc-subtitle">${l}</h3>`;
-        } else if (/^[-•]/.test(l)) {
-            if (!enLista) { html += `<ul class="doc-list">`; enLista = true; }
-            html += `<li>${l.replace(/^[-•]\s*/, "")}</li>`;
-        } else {
-            cerrarLista();
-            html += `<p class="doc-paragraph">${l}</p>`;
-        }
-    });
+    if (skipNext) {
+        skipNext = false;
+        return;
+    }
+
+    // 👇 CASO ESPECIAL: Título del requerimiento:
+    if (l === "Título del requerimiento:") {
+        cerrarLista();
+        const valorTitulo = lineas[index + 1] || "";
+        html += `<h2 class="doc-section-title">Título del requerimiento: ${valorTitulo}</h2>`;
+        skipNext = true;
+        return;
+    }
+
+    if (titulosSecundarios.includes(l)) {
+        cerrarLista();
+        html += `<h2 class="doc-section-title">${l}</h2>`;
+    } else if (subtitulos.includes(l)) {
+        cerrarLista();
+        html += `<h3 class="doc-subtitle">${l}</h3>`;
+    } else if (/^[-•]/.test(l)) {
+        if (!enLista) { html += `<ul class="doc-list">`; enLista = true; }
+        html += `<li>${l.replace(/^[-•]\s*/, "")}</li>`;
+    } else {
+        cerrarLista();
+        html += `<p class="doc-paragraph">${l}</p>`;
+    }
+});
 
     cerrarLista();
     html += `</div>`;
